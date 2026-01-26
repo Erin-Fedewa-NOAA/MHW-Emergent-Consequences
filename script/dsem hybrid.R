@@ -1,5 +1,5 @@
-#GOAL: Identify causal links between the marine heatwave, collapse and tanner
-  #crab abundance
+#GOAL: Identify causal links between the marine heatwave, collapse and hybrid
+#crab abundance
 
 #Author: EJF
 
@@ -15,59 +15,43 @@ library(corrplot)
 #read in data
 sea_ice <- read.csv("./output/seaice_output.csv")
 crab_abund <- read.csv("./output/crab_abundance.csv")
-area <- read.csv("./output/area_occupied_output.csv")
+overlap <- read.csv("./output/Emily output/bhatt_snowTanner.csv")
 
 #########################################################
-# quick function to plot dsem output
-#Author: Cole M. 
-plot_fit <- function(data, fit_dsem_tanner){
-  ParHat <- fit_dsem_tanner$obj$env$parList()
-  out <- lapply(1:ncol(data), function(i) {
-    tmp <- data.frame(year=1988+1:nrow(data), variable=colnames(data)[i], 
-                      obs=data[,i], pred=ParHat$x_tj[,i] )
-    SD = as.list(fit_dsem_tanner$sdrep,what="Std.")$x_tj[,i]
-    cbind( tmp, "lower"=tmp$pred - ifelse(is.na(SD),0,SD),
-           "upper"=tmp$pred + ifelse(is.na(SD),0,SD) )
-  }) |> bind_rows() 
-  out$variable <- factor(out$variable, levels=colnames(data))
-  g <- ggplot(out, aes(x=year, y=pred, ymin=lower, ymax=upper)) + geom_line() + 
-    facet_wrap('variable', scales='free', dir='v') + geom_ribbon(alpha=.2) 
-  g + geom_point(data=na.omit(out), mapping=aes(y=obs), col='red')
-}
-
-
-######################################################
 #Join covariates and response, Z score variables 
 sea_ice %>%
   rename_with(tolower) %>%
   rename(sea_ice = ice_avg) %>%
   filter(year >= 1988) %>%
-  full_join(area %>%
+  full_join(overlap %>%
               rename_with(tolower) %>%
-              rename(tanner_spatial_extent = tanner_area) %>%
-              select(-snow_area)) %>%
+              filter(comparison == "tannerlgmale-snowmatfem") %>%
+              select(year, bhatt) %>%
+              rename(snow_tanner_overlap = bhatt)) %>%
   full_join(crab_abund %>%
-              filter(category == "population" & species %in% c("snow", "tanner")) %>%
+              filter(category == "population") %>%
               select(year, abundance, species) %>%
               pivot_wider(names_from = "species", values_from = "abundance") %>%
-              rename(snow_abundance=snow, tanner_abundance=tanner)) %>%
+              rename(snow_abundance=snow, tanner_abundance=tanner,
+                     hybrid_abundance=hybrid)) %>%
   drop_na() %>%
-  mutate(across(c(2:5), ~ (.-mean(.,na.rm=T))/sd(.,na.rm=T), .names = "z_{.col}")) %>%
-  select(-sea_ice, -tanner_spatial_extent, -snow_abundance, -tanner_abundance) %>%
-  rename(sea_ice = z_sea_ice, tanner_spatial_extent = z_tanner_spatial_extent, 
+  mutate(across(c(2:6), ~ (.-mean(.,na.rm=T))/sd(.,na.rm=T), .names = "z_{.col}")) %>%
+  select(-sea_ice, -snow_tanner_overlap, -snow_abundance, -tanner_abundance, -hybrid_abundance) %>%
+  rename(sea_ice = z_sea_ice, snow_tanner_overlap = z_snow_tanner_overlap, 
          snow_abundance = z_snow_abundance,
-         tanner_abundance = z_tanner_abundance) -> tanner_data
+         tanner_abundance = z_tanner_abundance,
+         hybrid_abundance = z_hybrid_abundance) -> hybrid_data
 
 #Assess collinearity b/w variables
 #if correlated, we should have a node in our DAG below
-tanner_data %>% 
+hybrid_data %>% 
   select(-year) %>%
   cor(use = "pairwise.complete.obs") %>%
   corrplot(method="number")
 
 #plot z-scored variables
-tanner_data %>%
-  pivot_longer(2:5, names_to="variable", values_to="value") %>%
+hybrid_data %>%
+  pivot_longer(2:6, names_to="variable", values_to="value") %>%
   ggplot(aes(year, value)) +
   geom_point() +
   geom_line() +
@@ -75,11 +59,13 @@ tanner_data %>%
   theme_bw()
 
 #visually explore lags
-ccf(tanner_data$snow_abundance, tanner_data$tanner_abundance)
-ccf(tanner_data$snow_abundance, tanner_data$tanner_spatial_extent)
-ccf(tanner_data$sea_ice, tanner_data$tanner_spatial_extent)
-ccf(tanner_data$sea_ice, tanner_data$tanner_abundance)
-ccf(tanner_data$tanner_spatial_extent, tanner_data$tanner_abundance)
+ccf(hybrid_data$snow_abundance, hybrid_data$hybrid_abundance)
+ccf(hybrid_data$tanner_abundance, hybrid_data$hybrid_abundance)
+ccf(hybrid_data$snow_abundance, hybrid_data$snow_tanner_overlap)
+ccf(hybrid_data$tanner_abundance, hybrid_data$snow_tanner_overlap)
+ccf(hybrid_data$sea_ice, hybrid_data$hybrid_abundance)
+ccf(hybrid_data$sea_ice, hybrid_data$snow_tanner_overlap)
+ccf(hybrid_data$snow_tanner_overlap, hybrid_data$hybrid_abundance)
 
 ##########################################
 #First let's use a DAG to test for conditional independencies and validate our
@@ -87,57 +73,61 @@ ccf(tanner_data$tanner_spatial_extent, tanner_data$tanner_abundance)
 
 #download specified DAG from dagitty.net - conditional independencies are 
 #identified based on structure of DAG drawn in dagitty
-tanner_dag <- dagitty('dag {
+hybrid_dag <- dagitty('dag {
+hybrid_abundance [outcome,pos="0.145,1.184"]
 sea_ice [exposure,pos="-0.185,1.150"]
 snow_abundance [pos="-0.008,1.032"]
-tanner_abundance [outcome,pos="0.145,1.184"]
-tanner_spatial_extent [pos="-0.012,1.338"]
-sea_ice -> snow_abundance
+snow_tanner_overlap [pos="-0.011,1.155"]
+tanner_abundance [pos="-0.012,1.338"]
+sea_ice -> hybrid_abundance [pos="0.028,1.318"]
+sea_ice -> snow_abundance [pos="-0.099,1.041"]
+sea_ice -> snow_tanner_overlap
 sea_ice -> tanner_abundance
-sea_ice -> tanner_spatial_extent
-snow_abundance -> tanner_abundance
-snow_abundance -> tanner_spatial_extent
-tanner_spatial_extent -> tanner_abundance
+snow_abundance -> hybrid_abundance [pos="0.135,1.100"]
+snow_abundance -> snow_tanner_overlap
+snow_tanner_overlap -> hybrid_abundance
+tanner_abundance -> hybrid_abundance [pos="0.119,1.254"]
+tanner_abundance -> snow_tanner_overlap
 }
 ')
 
 #plot DAG
-ggdag(tanner_dag, layout = "nicely") +
+ggdag(hybrid_dag, layout = "nicely") +
   theme_dag()
 
-plot(tanner_dag)
+plot(hybrid_dag)
 
-ggdag_status(tanner_dag, text = FALSE, use_labels = "name") +
+ggdag_status(hybrid_dag, text = FALSE, use_labels = "name") +
   #guides(color = "none") +  # Turn off legend
   theme_dag()
 
 #identify paths
-paths(tanner_dag)
-#5 open causal pathways 
+paths(hybrid_dag)
+#6 open causal pathways 
 
 #and plot paths
-ggdag_paths(tanner_dag, text = FALSE, use_labels = "name") +
+ggdag_paths(hybrid_dag, text = FALSE, use_labels = "name") +
   theme_dag()
 
 #find adjustment sets
-adjustmentSets(tanner_dag, exposure="sea_ice", outcome="tanner_abundance")
+adjustmentSets(hybrid_dag, exposure="sea_ice", outcome="tanner_abundance")
 #This tells us that no covariate adjustment is necessary to identify the causal effect
 #of marine heatwave on tanner abundance, ie there are no open backdoor paths 
 
 #and visualize adjustment sets, if there are any
-ggdag_adjustment_set(tanner_dag, shadow = TRUE) +
+ggdag_adjustment_set(hybrid_dag, shadow = TRUE) +
   theme_dag()
 
 #find conditional independencies- i.e. two variables that are implied to 
 # be independent and not correlated shouldn't be connected by a node
-impliedConditionalIndependencies(tanner_dag)
+impliedConditionalIndependencies(hybrid_dag)
 #because this is empty (ie no independencies exist, localTests()
 #below will produce no results)
 
 # evaluate the d-separation implications of our DAG with our simulated dataset
 #i.e. test for correlation between conditional independencies that are assumed
 #based on DAG
-test <- localTests(tanner_dag, tanner_data, type="cis")
+test <- localTests(hybrid_dag, hybrid_data, type="cis")
 #Note that this is probably not a useful tool for ecology since we have MUCH less
 #data, and probably working with time series that have missing data
 
@@ -154,8 +144,8 @@ test # should show all p values above 0.05, suggesting DAG-data consistency- aka
 #Now since our DAG looks good, let's specify a SEM
 
 #remove year
-tanner_data <- tanner_data %>% select(-year)
-data = ts(tanner_data)
+hybrid_data <- hybrid_data %>% select(-year)
+data = ts(hybrid_data)
 
 #define formulation: link, lag, param_name, start_value (see ?make_dsem_ram())
 
@@ -165,18 +155,22 @@ sem ="
 sea_ice -> sea_ice, 1, ar1 
 tanner_abundance -> tanner_abundance, 1, ar2
 snow_abundance -> snow_abundance, 1, ar3
-tanner_spatial_extent -> tanner_spatial_extent, 1, ar4
+snow_tanner_overlap -> snow_tanner_overlap, 1, ar4
+hybrid_abundance -> hybrid_abundance, 1, ar5
 
 #causal links with mechanistic lags
+sea_ice -> hybrid_abundance, 1, icetohybrid
 sea_ice -> snow_abundance, 1, icetosnow
+sea_ice -> snow_tanner_overlap, 1, icetooverlap
 sea_ice -> tanner_abundance, 1, icetotanner
-sea_ice -> tanner_spatial_extent, 1, icetoarea
-snow_abundance -> tanner_abundance, 3, snowtotanner
-snow_abundance -> tanner_spatial_extent, 2, snowtoarea
-tanner_spatial_extent -> tanner_abundance, 2, areatotanner
+snow_abundance -> hybrid_abundance, 4, snowtohybrid
+snow_abundance -> snow_tanner_overlap, 1, snowtooverlap
+snow_tanner_overlap -> hybrid_abundance, 4, overlaptohybrid
+tanner_abundance -> hybrid_abundance, 4, tannertohybrid
+tanner_abundance -> snow_tanner_overlap, 1, tannertooverlap
 "
 #define family
-family <- rep('fixed', ncol(tanner_data))
+family <- rep('fixed', ncol(hybrid_data))
 ## family <- c('normal', 'normal', 'normal', 'fixed', 'fixed', 'fixed')
 
 #control section
@@ -198,38 +192,38 @@ parameters$delta0_j = rep( 0, ncol(data) )
 
 
 ## refit model with delta0
-fit_dsem_tanner <- dsem(sem=sem, tsdata=data, 
-                     family=family,
-                     estimate_delta0=TRUE,
-                     control=dsem_control(quiet=TRUE,
-                                          parameters = parameters))
+fit_dsem_hybrid <- dsem(sem=sem, tsdata=data, 
+                        family=family,
+                        estimate_delta0=TRUE,
+                        control=dsem_control(quiet=TRUE,
+                                             parameters = parameters))
 
-summary(fit_dsem_tanner)
-fit_dsem_tanner$opt$par
-ParHat = fit_dsem_tanner$obj$env$parList()
-knitr::kable( summary(fit_dsem_tanner), digits=3 )
+summary(fit_dsem_hybrid)
+fit_dsem_hybrid$opt$par
+ParHat = fit_dsem_hybrid$obj$env$parList()
+knitr::kable( summary(fit_dsem_hybrid), digits=3 )
 
 #plot dsem output
-plot_fit(data, fit_dsem_tanner)
+plot_fit(data, fit_dsem_hybrid)
 #Need to revise function: also see https://james-thorson-noaa.github.io/dsem/articles/features.html
 #for timeseries plot and dag with effects 
 
 # sample-based quantile residuals
-samples = loo_residuals(fit_dsem_tanner, what="samples", track_progress=FALSE)
-which_use = which(!is.na(tanner_data))
-fitResp = loo_residuals( fit_dsem_tanner, what="loo", track_progress=FALSE)[,'est']
+samples = loo_residuals(fit_dsem_hybrid, what="samples", track_progress=FALSE)
+which_use = which(!is.na(hybrid_data))
+fitResp = loo_residuals( fit_dsem_hybrid, what="loo", track_progress=FALSE)[,'est']
 simResp = apply(samples, MARGIN=3, FUN=as.vector)[which_use,]
 
 # Build and display DHARMa object
 res = DHARMa::createDHARMa(
   simulatedResponse = simResp,
-  observedResponse = unlist(tanner_data)[which_use],
+  observedResponse = unlist(hybrid_data)[which_use],
   fittedPredictedResponse = fitResp )
 plot(res)
 #looks good
 
 # Calculate total effects
-effect = total_effect(fit_dsem_tanner)
+effect = total_effect(fit_dsem_hybrid)
 
 # Plot total effect
 ggplot( effect) + 
@@ -237,13 +231,11 @@ ggplot( effect) +
   facet_grid( from ~ to  )
 
 #relative importance of variables as predictors of female size structure
-partition_variance(fit_dsem_tanner,
+partition_variance(fit_dsem_hybrid,
                    which_response = "female_size_structure",
                    n_times = 10 )
 #hmm maybe this is in development version of dsem only? 
 
 #D-separation test
-test_dsep(fit_dsem_tanner) #null hypothesis- the data came from the model- 
+test_dsep(fit_dsem_hybrid) #null hypothesis- the data came from the model- 
 #hmmm, need to investigate this, we don't have missing data  
-
-
