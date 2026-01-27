@@ -224,6 +224,9 @@ plot(res)
 
 # Calculate total effects
 effect = total_effect(fit_dsem_hybrid)
+#this suggests that model didn't converge(?) See AR1 term for hybrid abundance > 1. Is a 
+  #different error structure more appropriate, or is it due to the explosive behavior 
+  #of this time series?
 
 # Plot total effect
 ggplot( effect) + 
