@@ -2,7 +2,9 @@
 Exploratory analyses aimed to identify causal links between the 2018-2019 marine heatwave, subsequent snow crab collapse, and anamolous observations from the 2022-2025 bottom trawl surveys post-collapse. These analyses were conducted using a structural causal modeling framework and the DSEM R package. 
 
 # Research Team
-Erin Fedewa, Emily Ryznar, Chris Long, Mike Litzow
+E. Fedewa, E. Ryznar, C. Long, M. Litzow
+
+![Rplot](https://github.com/Erin-Fedewa-NOAA/MHW-Emergent-Consequences/figures/full model dag.pdf)
 
  # NOAA License
 This repository is a scientific product and is not official communication of the National Oceanic and Atmospheric Administration, or the United States Department of Commerce. All NOAA GitHub project code is provided on an ‘as is’ basis and the user assumes responsibility for its use. Any claims against the Department of Commerce or Department of Commerce bureaus stemming from the use of this GitHub project will be governed by all applicable Federal law. Any reference to specific commercial products, processes, or services by service mark, trademark, manufacturer, or otherwise, does not constitute or imply their endorsement, recommendation or favoring by the Department of Commerce. The Department of Commerce seal and logo, or the seal and logo of a DOC bureau, shall not be used in any manner to imply endorsement of any commercial product or activity by DOC or the United States Government.
