@@ -1,5 +1,5 @@
 #Produce crab abundance survey output for 
-#1) hybrids (not yet split out by sex/maturity categories)
+#1) hybrids 
 #2) snow and tanner population
 #2) immature/mature female snow crab
 #4) large male snow crab (95mm +)
@@ -50,6 +50,55 @@ hyb_abun_pop <- calc_bioabund(crab_data = hybrid,
 #Plot
 hyb_abun_pop %>%
   ggplot(aes(x = year, y = abundance)) +
+  geom_point() +
+  geom_line()+
+  labs(y = "Number of crab (millions)", x = "") +
+  theme_bw()
+
+#now let's subset hybrids for sizes that we know we're able to detect 
+  #first females > 65mm
+hyb_sub_female <- calc_bioabund(crab_data = hybrid,
+                              species = "HYBRID",
+                              region = "EBS",
+                              sex = "female", 
+                              size_min = 65,
+                              years = years) %>%
+  select(YEAR, ABUNDANCE, ABUNDANCE_CI) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6),
+         ABUNDANCE_CI = as.numeric(ABUNDANCE_CI/1e6)) %>%
+  rename_with(tolower) %>%
+  rename(abundance_fem = abundance, abundance_female_ci=abundance_ci)
+
+#and then males > 79mm
+calc_bioabund(crab_data = hybrid,
+                          species = "HYBRID",
+                          region = "EBS",
+                          sex = "male", 
+                          size_min = 79,
+                          years = years) %>%
+  select(YEAR, ABUNDANCE, ABUNDANCE_CI) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6),
+         ABUNDANCE_CI = as.numeric(ABUNDANCE_CI/1e6)) %>%
+  rename_with(tolower) %>%
+  rename(abundance_male = abundance, abundance_male_ci=abundance_ci) %>%
+#join to females and sum for hybrid abundance
+full_join(hyb_sub_female) %>%
+  group_by(year) %>%
+  mutate(abundance = sum(abundance_male, abundance_fem)) %>%
+  select(year, abundance) %>%
+  mutate(category = "population_subset",
+         species = "hybrid") %>%
+#join to full hybrid population time series 
+full_join(hyb_abun_pop) -> hyb_abun
+
+
+#Plot both timeseries
+hyb_abun %>%
+  ggplot(aes(x = year, y = abundance, color=category)) +
   geom_point() +
   geom_line()+
   labs(y = "Number of crab (millions)", x = "") +
@@ -150,11 +199,12 @@ snow_abun_lgmale  %>%
   theme_bw()
 
 #join all abundance datasets
-hyb_abun_pop %>%
+hyb_abun %>%
   full_join(snow_abun_pop) %>%
   full_join(tanner_abun_pop) %>%
   full_join(snow_abun_female) %>%
-  full_join(snow_abun_lgmale) -> abun_dat
+  full_join(snow_abun_lgmale) %>%
+  select(-abundance_ci) -> abun_dat
 
 #Write output 
 write_csv(abun_dat, "./output/crab_abundance.csv")

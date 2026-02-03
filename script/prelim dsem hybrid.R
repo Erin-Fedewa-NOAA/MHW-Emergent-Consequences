@@ -29,7 +29,8 @@ sea_ice %>%
               select(year, bhatt) %>%
               rename(snow_tanner_overlap = bhatt)) %>%
   full_join(crab_abund %>%
-              filter(category == "population") %>%
+              filter(category == "population" & species %in% c("snow", "tanner") |
+                       category == "population_subset") %>%
               select(year, abundance, species) %>%
               pivot_wider(names_from = "species", values_from = "abundance") %>%
               rename(snow_abundance=snow, tanner_abundance=tanner,

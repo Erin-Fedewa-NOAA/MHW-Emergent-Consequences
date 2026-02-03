@@ -18,26 +18,6 @@ female_size <- read.csv("./output/female_size.csv")
 crab_abund <- read.csv("./output/crab_abundance.csv")
 
 #########################################################
-# quick fucntion to plot dsem output
-  #Author: Cole M. 
-plot_fit <- function(data, fit_dsem_fem){
-  ParHat <- fit_dsem_fem$obj$env$parList()
-  out <- lapply(1:ncol(data), function(i) {
-    tmp <- data.frame(year=1988+1:nrow(data), variable=colnames(data)[i], 
-                      obs=data[,i], pred=ParHat$x_tj[,i] )
-    SD = as.list(fit_dsem_fem$sdrep,what="Std.")$x_tj[,i]
-    cbind( tmp, "lower"=tmp$pred - ifelse(is.na(SD),0,SD),
-           "upper"=tmp$pred + ifelse(is.na(SD),0,SD) )
-  }) |> bind_rows() 
-  out$variable <- factor(out$variable, levels=colnames(data))
-  g <- ggplot(out, aes(x=year, y=pred, ymin=lower, ymax=upper)) + geom_line() + 
-    facet_wrap('variable', scales='free', dir='v') + geom_ribbon(alpha=.2) 
-  g + geom_point(data=na.omit(out), mapping=aes(y=obs), col='red')
-}
-
-
-######################################################
-
 #Join covariates and response, Z score variables 
 sea_ice %>%
   rename_with(tolower) %>%
