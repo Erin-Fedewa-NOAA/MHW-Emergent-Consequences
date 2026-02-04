@@ -8,6 +8,7 @@
 #Author: EJF
 
 #load 
+library(tidyverse)
 library(dsem)
 library(ggplot2)
 library(dplyr)
@@ -133,39 +134,44 @@ ggdag(full_dag, layout = "nicely") +
 
 plot(full_dag) 
 
-ggdag_status(hybrid_dag, text = FALSE, use_labels = "name") +
+ggdag_status(full_dag, text = FALSE, use_labels = "name") +
   #guides(color = "none") +  # Turn off legend
   theme_dag()
 
 #identify paths
-paths(hybrid_dag)
-#6 open causal pathways 
+paths(full_dag)
+#13 open causal pathways 
 
 #and plot paths
-ggdag_paths(hybrid_dag, text = FALSE, use_labels = "name") +
+ggdag_paths(full_dag, text = FALSE, use_labels = "name") +
   theme_dag()
 
-#find adjustment sets
-adjustmentSets(hybrid_dag, exposure="sea_ice", outcome="tanner_abundance")
+#find adjustment sets for response variable 1
+adjustmentSets(full_dag, exposure="sea_ice", outcome="tanner_abundance")
+#This tells us that no covariate adjustment is necessary to identify the causal effect
+#of marine heatwave on tanner abundance, ie there are no open backdoor paths 
+
+#find adjustment sets for response variable 2
+adjustmentSets(full_dag, exposure="sea_ice", outcome="hybrid_abundance")
 #This tells us that no covariate adjustment is necessary to identify the causal effect
 #of marine heatwave on tanner abundance, ie there are no open backdoor paths 
 
 #and visualize adjustment sets, if there are any
-ggdag_adjustment_set(hybrid_dag, shadow = TRUE) +
+ggdag_adjustment_set(full_dag, shadow = TRUE) +
   theme_dag()
 
 #find conditional independencies- i.e. two variables that are implied to 
 # be independent and not correlated shouldn't be connected by a node
-impliedConditionalIndependencies(hybrid_dag)
+impliedConditionalIndependencies(full_dag)
 #because this is empty (ie no independencies exist, localTests()
 #below will produce no results)
 
 # evaluate the d-separation implications of our DAG with our simulated dataset
 #i.e. test for correlation between conditional independencies that are assumed
 #based on DAG
-test <- localTests(hybrid_dag, hybrid_data, type="cis")
-#Note that this is probably not a useful tool for ecology since we have MUCH less
-#data, and probably working with time series that have missing data
+test <- localTests(full_dag, hybrid_data, type="cis")
+#Note that this approach is not valid for our DAG b/c it does not test lags
+  #that we'll define in the model structure below
 
 # perform Holm-Bonferrino correction to mitigate problems around multiple testing 
 test$p.value <- p.adjust(test$p.value) 
@@ -185,21 +191,22 @@ data = ts(hybrid_data)
 
 #define formulation: link, lag, param_name, start_value (see ?make_dsem_ram())
 sem ="
-#AR1 for each variable
+#AR1 for each variable (change 1 to 0 for iid)
  #Estimate in output shows correlation (if very small, might not need AR1)
 sea_ice -> sea_ice, 1, ar1 
 tanner_abundance -> tanner_abundance, 1, ar2
 snow_abundance -> snow_abundance, 1, ar3
 snow_tanner_overlap -> snow_tanner_overlap, 1, ar4
-hybrid_abundance -> hybrid_abundance, 1, ar5 #try random walk? 
+hybrid_abundance -> hybrid_abundance, 1, ar5  
 
 #causal links with mechanistic lags
-sea_ice -> hybrid_abundance, 6, icetohybrid
+sea_ice -> hybrid_abundance, 5, icetohybrid
 sea_ice -> snow_abundance, 1, icetosnow
 sea_ice -> snow_tanner_overlap, 1, icetooverlap
-sea_ice -> tanner_abundance, 6, icetotanner
+sea_ice -> tanner_abundance, 5, icetotanner
 snow_abundance -> hybrid_abundance, 3, snowtohybrid
-snow_tanner_overlap -> hybrid_abundance, 1, overlaptohybrid
+snow_abundance -> tanner_abundance, 3, snowtotanner
+snow_tanner_overlap -> hybrid_abundance, 5, overlaptohybrid
 tanner_abundance -> hybrid_abundance, 3, tannertohybrid
 "
 #define family
@@ -256,13 +263,17 @@ plot(res)
 #looks good
 
 # Calculate total effects
-effect = total_effect(fit_dsem)
-#Sparse matrix has a 0 or NA - lags too long?
+effect = total_effect(fit_dsem, n_lags = 6)
+#specifying n+1 longest lag so sparse matrix doesn't have NAs
 
 # Plot total effect
 ggplot( effect) + 
   geom_bar(aes(lag, total_effect, fill=lag), stat='identity', col='black', position='dodge' ) +
   facet_grid( from ~ to  )
+#if we test an iid model structure above (ie switch 1's in AR1 terms to 0) there shouldn't
+  #be n-1 lags, only the specified lag
+#note that for response variables with direct and indirect causal links, we see total
+  #effects for each specified lag/causal path
 
 #relative importance of variables as predictors of female size structure
 partition_variance(fit_dsem,
