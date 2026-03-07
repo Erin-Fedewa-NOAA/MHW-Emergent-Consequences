@@ -1,10 +1,6 @@
 #Now that we've built complexity with female, tanner and hybrid DSEM models, 
   #let's fit a full model integrating all responses of interest 
 
-#NOTE: after consideration, it seems more appropriate to examine female size 
-  #structure shift within Emily's SAM workflow so we can account for cohort 
-  #effects. Pulling it out of this analysis for now! 
-
 #Author: EJF
 
 #load 
@@ -20,22 +16,20 @@ library(corrplot)
 #read in data
 sea_ice <- read.csv("./output/seaice_output.csv")
 crab_abund <- read.csv("./output/crab_abundance.csv")
-overlap <- read.csv("./output/Emily output/bhatt_snowTanner.csv")
+overlap <- read.csv("./output/overlap_output.csv")
 
-#########################################################
-#Join covariates and response
+#-----------------------------
+# Define covariates and standardize
+#-----------------------------
+
 sea_ice %>%
   rename_with(tolower) %>%
   rename(sea_ice = ice_avg) %>%
   filter(year >= 1988) %>%
   full_join(overlap %>%
-              rename_with(tolower) %>%
-              filter(comparison == "tannerlgmale-snowmatfem") %>%
-              select(year, bhatt) %>%
-              rename(snow_tanner_overlap = bhatt)) %>%
+              select(-bhatta_global)) %>%
   full_join(crab_abund %>%
-              filter(category == "population" & species %in% c("snow", "tanner") |
-                       category == "population_subset") %>%
+              filter(category == "maturefem_lgmale") %>%
               select(year, abundance, species) %>%
               pivot_wider(names_from = "species", values_from = "abundance") %>%
               rename(snow_abundance=snow, tanner_abundance=tanner,
@@ -44,7 +38,7 @@ sea_ice %>%
 
 #plot 
 dat %>%
-  pivot_longer(2:6, names_to="variable", values_to="value") %>%
+  pivot_longer(2:7, names_to="variable", values_to="value") %>%
   ggplot(aes(year, value)) +
   geom_point() +
   geom_line() +
@@ -68,9 +62,11 @@ plot_histo(dat)
 dat %>%
   mutate(log_hybrid_abundance = log(hybrid_abundance)) %>%
   select(-hybrid_abundance) %>%
-  mutate(across(c(2:6), ~ (.-mean(.,na.rm=T))/sd(.,na.rm=T), .names = "z_{.col}")) %>%
-  select(-sea_ice, -snow_tanner_overlap, -snow_abundance, -tanner_abundance, -log_hybrid_abundance) %>%
-  rename(sea_ice = z_sea_ice, snow_tanner_overlap = z_snow_tanner_overlap, 
+  mutate(across(c(2:7), ~ (.-mean(.,na.rm=T))/sd(.,na.rm=T), .names = "z_{.col}")) %>%
+  select(-sea_ice, -bhatta_snowfem_tanmale, -snow_abundance, -tanner_abundance, 
+         -bhatta_tannerfem_snowmale, -log_hybrid_abundance) %>%
+  rename(sea_ice = z_sea_ice, bhatta_tannerfem_snowmale = z_bhatta_tannerfem_snowmale, 
+         bhatta_snowfem_tanmale = z_bhatta_snowfem_tanmale,
          snow_abundance = z_snow_abundance,
          tanner_abundance = z_tanner_abundance,
          hybrid_abundance = z_log_hybrid_abundance) -> hybrid_data
@@ -89,7 +85,7 @@ plot_histo(hybrid_data)
 
 #plot z-scored variables
 hybrid_data %>%
-  pivot_longer(2:6, names_to="variable", values_to="value") %>%
+  pivot_longer(2:7, names_to="variable", values_to="value") %>%
   ggplot(aes(year, value)) +
   geom_point() +
   geom_line() +
@@ -98,16 +94,16 @@ hybrid_data %>%
 
 #visually explore lags, though we'll base primarily on mechanistic understanding
   #for lag specification in models below
-ccf(hybrid_data$snow_abundance, hybrid_data$hybrid_abundance) #1-4 yr lag
-ccf(hybrid_data$tanner_abundance, hybrid_data$hybrid_abundance) #0 yr lag
-ccf(hybrid_data$sea_ice, hybrid_data$hybrid_abundance) #6-7 yr lag
-ccf(hybrid_data$sea_ice, hybrid_data$snow_tanner_overlap)
-ccf(hybrid_data$sea_ice, hybrid_data$tanner_abundance)
-ccf(hybrid_data$snow_tanner_overlap, hybrid_data$hybrid_abundance) #0-1 yr lag
+ccf(hybrid_data$hybrid_abundance, hybrid_data$snow_abundance) #7+yrs
+ccf(hybrid_data$hybrid_abundance, hybrid_data$tanner_abundance) #0-1 yr lag
+ccf(hybrid_data$hybrid_abundance, hybrid_data$sea_ice) #6-7 yr lag
+ccf(hybrid_data$tanner_abundance, hybrid_data$sea_ice)
+ccf(hybrid_data$hybrid_abundance, hybrid_data$bhatta_tannerfem_snowmale) #lag 1-4
+ccf(hybrid_data$hybrid_abundance, hybrid_data$bhatta_snowfem_tanmale) #lag 0-1
 
-#########################################################
-#First let's use a DAG to test for conditional independencies and validate our
-#model structure 
+#-----------------------------
+# Test for DAG-data consistency
+#-----------------------------
 
 #download specified DAG from dagitty.net - conditional independencies are 
 #identified based on structure of DAG drawn in dagitty
@@ -182,8 +178,9 @@ test # should show all p values above 0.05, suggesting DAG-data consistency- aka
 #common cause that you're not accounting for (or can't account for if latent), 
 #or a spurious correlation with no mechanism- but we shouldn't be held to this, data shouldn't be informing DAG!
 
-############################################
-#Now since our DAG looks good, let's specify a SEM
+#-----------------------------
+# Specify a SEM
+#-----------------------------
 
 #remove year
 hybrid_data <- hybrid_data %>% select(-year)
@@ -196,17 +193,18 @@ sem ="
 sea_ice -> sea_ice, 1, ar1 
 tanner_abundance -> tanner_abundance, 1, ar2
 snow_abundance -> snow_abundance, 1, ar3
-snow_tanner_overlap -> snow_tanner_overlap, 1, ar4
+bhatta_snowfem_tanmale -> bhatta_snowfem_tanmale, 1, ar4
 hybrid_abundance -> hybrid_abundance, 1, ar5  
 
 #causal links with mechanistic lags
 sea_ice -> hybrid_abundance, 5, icetohybrid
+sea_ice -> hybrid_abundance, 4, icetohybrid
 sea_ice -> snow_abundance, 1, icetosnow
-sea_ice -> snow_tanner_overlap, 1, icetooverlap
+sea_ice -> bhatta_tannerfem_snowmale, 1, icetooverlap
 sea_ice -> tanner_abundance, 5, icetotanner
 snow_abundance -> hybrid_abundance, 3, snowtohybrid
 snow_abundance -> tanner_abundance, 3, snowtotanner
-snow_tanner_overlap -> hybrid_abundance, 5, overlaptohybrid
+bhatta_tannerfem_snowmale -> hybrid_abundance, 5, overlaptohybrid
 tanner_abundance -> hybrid_abundance, 3, tannertohybrid
 "
 #define family

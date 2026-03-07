@@ -1,10 +1,10 @@
 #Produce crab abundance survey output for 
-#1) hybrids 
+#1) hybrid population
 #2) snow and tanner population
-#2) immature/mature female snow crab
-#4) large male snow crab (95mm +)
-#note: Emily's sdmtmb maturity workflow is not yet built into crabpack, so we're 
-  #not generating male abundance estimates by maturity here 
+#3) immature snow/tanner
+#4) mature female and large male tanner/snow crab (large male cutoffs
+  #represent size at functional maturity b/c we're interested in portion
+  #of the population participating in the mate)
 
 #Author: EJF
 
@@ -31,9 +31,11 @@ tanner <- get_specimen_data(species = "TANNER",
                             region = "EBS",
                             channel = "KOD")
 
-#################################
+#-----------------------------
+# Hybrid abundance timeseries
+#-----------------------------
 
-#calculate hybrid abundance timeseries 
+#calculate hybrid population abundance timeseries 
 hyb_abun_pop <- calc_bioabund(crab_data = hybrid,
                               species = "HYBRID",
                               region = "EBS",
@@ -55,13 +57,12 @@ hyb_abun_pop %>%
   labs(y = "Number of crab (millions)", x = "") +
   theme_bw()
 
-#now let's subset hybrids for sizes that we know we're able to detect 
-  #first females > 65mm
-hyb_sub_female <- calc_bioabund(crab_data = hybrid,
+#now let's subset hybrids for a representative psuedocohort
+hyb_sub <- calc_bioabund(crab_data = hybrid,
                               species = "HYBRID",
                               region = "EBS",
-                              sex = "female", 
-                              size_min = 65,
+                              size_min = 50,
+                              size_max = 65,
                               years = years) %>%
   select(YEAR, ABUNDANCE, ABUNDANCE_CI) %>%
   right_join(., expand.grid(YEAR = years)) %>%
@@ -69,34 +70,32 @@ hyb_sub_female <- calc_bioabund(crab_data = hybrid,
   mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6),
          ABUNDANCE_CI = as.numeric(ABUNDANCE_CI/1e6)) %>%
   rename_with(tolower) %>%
-  rename(abundance_fem = abundance, abundance_female_ci=abundance_ci)
+  mutate(category = "50_65mm",
+         species = "hybrid") 
 
-#and then males > 79mm
-calc_bioabund(crab_data = hybrid,
-                          species = "HYBRID",
-                          region = "EBS",
-                          sex = "male", 
-                          size_min = 79,
-                          years = years) %>%
-  select(YEAR, ABUNDANCE, ABUNDANCE_CI) %>%
+#and now mature females/large males only
+hybrid_lg_mat <- calc_bioabund(crab_data = hybrid,
+                             species = "HYBRID",
+                             region = "EBS",
+                             crab_category = c("mature_female",
+                                               "large_male"),
+                             years = years) %>%
+  select(YEAR, ABUNDANCE, CATEGORY) %>%
+  pivot_wider(names_from = CATEGORY, values_from = ABUNDANCE) %>%
+  group_by(YEAR) %>%
+  mutate(ABUNDANCE = sum(large_male + mature_female)) %>%
+  select(YEAR, ABUNDANCE) %>%
   right_join(., expand.grid(YEAR = years)) %>%
   arrange(YEAR) %>%
-  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6),
-         ABUNDANCE_CI = as.numeric(ABUNDANCE_CI/1e6)) %>%
+  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6)) %>%
   rename_with(tolower) %>%
-  rename(abundance_male = abundance, abundance_male_ci=abundance_ci) %>%
-#join to females and sum for hybrid abundance
-full_join(hyb_sub_female) %>%
-  group_by(year) %>%
-  mutate(abundance = sum(abundance_male, abundance_fem)) %>%
-  select(year, abundance) %>%
-  mutate(category = "population_subset",
+  mutate(category = "maturefem_lgmale",
          species = "hybrid") %>%
-#join to full hybrid population time series 
-full_join(hyb_abun_pop) -> hyb_abun
+  #join to full hybrid population/psuedo-cohort time series 
+  full_join(hyb_abun_pop) %>%
+  full_join(hyb_sub) -> hyb_abun
 
-
-#Plot both timeseries
+#Plot timeseries
 hyb_abun %>%
   ggplot(aes(x = year, y = abundance, color=category)) +
   geom_point() +
@@ -104,7 +103,63 @@ hyb_abun %>%
   labs(y = "Number of crab (millions)", x = "") +
   theme_bw()
 
-#calculate snow crab abundance timeseries 
+#Lastly, to inform a hybrid population abundance metric that best represents 
+  #the peak seen in 2024-2025, let's look at the size interval that contains 
+  #the central 90% of the abundance for 2025
+
+size_range <- calc_bioabund(crab_data = hybrid,
+                      species = "HYBRID",
+                      region = "EBS",
+                      years = 2025,
+                      bin_1mm = T) %>%
+  select(YEAR, ABUNDANCE, SIZE_1MM) %>%
+  arrange(SIZE_1MM, .by_group = TRUE) %>%
+  mutate(total_abundance = sum(ABUNDANCE),
+        cum_abundance = cumsum(ABUNDANCE),
+        cum_prop = cum_abundance / total_abundance) %>%
+  summarise(lower_90 = SIZE_1MM[which(cum_prop >= 0.05)[1]],
+             upper_90 = SIZE_1MM[which(cum_prop >= 0.95)[1]], .groups = "drop")
+
+size_range #48 - 103mm
+
+#let's plot this now
+calc_bioabund(crab_data = hybrid,
+              species = "HYBRID",
+              region = "EBS",
+              years = 2025,
+              bin_1mm = T) %>%
+  select(YEAR, ABUNDANCE, SIZE_1MM) %>%
+  ggplot(aes(x = SIZE_1MM, y = ABUNDANCE)) +
+  geom_col(width = 1, fill = "steelblue", color = "black") +
+  geom_vline(xintercept = 48, linetype = "dashed", color = "red", linewidth = 1) +
+  geom_vline(xintercept = 103, linetype = "dashed", color = "red", linewidth = 1) +
+  labs(x = "Carapace width (mm)", y = "Hybrid Abundance") +
+  theme_minimal()
+
+#And then calculate an abundance timeseries using these cutoffs
+hybrid_90perc <- calc_bioabund(crab_data = hybrid,
+                               species = "HYBRID",
+                               region = "EBS",
+                               size_min = 48,
+                               size_max = 103,
+                               years = years) %>%
+  select(YEAR, ABUNDANCE) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6)) %>%
+  rename_with(tolower) %>%
+  mutate(category = "population_subset",
+         species = "hybrid")
+
+#and join to full hybrid population/psuedo-cohort time series 
+hybrid_90perc %>%
+full_join(hyb_abun) -> hyb_abun_dat
+
+#-----------------------------
+# Snow Crab abundance timeseries
+#----------------------------- 
+
+#calculate snow crab population abundance timeseries 
 snow_abun_pop <- calc_bioabund(crab_data = snow,
                           species = "SNOW",
                           region = "EBS",
@@ -149,48 +204,124 @@ tanner_abun_pop %>%
   labs(y = "Number of crab (millions)", x = "") +
   theme_bw()
 
-#calculate snow crab mature/immature abundance timeseries 
-snow_abun_female <- calc_bioabund(crab_data = snow,
+#------------------------------------------------
+# Immature snow and tanner crab abundance timeseries
+#-------------------------------------------------------
+
+#immature female snow/tanner abundance timeseries 
+snow_imm_female <- calc_bioabund(crab_data = snow,
                            species = "SNOW",
                            region = "EBS",
-                           sex = "female",
-                           crab_category = c("mature_female", "immature_female"),
+                           size_min = 30,
+                           size_max = 60,
+                           crab_category = "immature_female",
                            years = years) %>%
-  select(YEAR, ABUNDANCE, ABUNDANCE_CI, CATEGORY) %>%
+  select(YEAR, ABUNDANCE, CATEGORY) %>%
   right_join(., expand.grid(YEAR = years)) %>%
   arrange(YEAR) %>%
-  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6),
-         ABUNDANCE_CI = as.numeric(ABUNDANCE_CI/1e6)) %>%
+  mutate(ABUNDANCE_IMMFEM = as.numeric(ABUNDANCE/1e6)) %>%
   rename_with(tolower) %>%
+  select(-category, -abundance) %>%
   mutate(species = "snow")
 
+tanner_imm_female <- calc_bioabund(crab_data = tanner,
+                                 species = "TANNER",
+                                 spatial_level = "region",
+                                 size_min = 30,
+                                 size_max = 60,
+                                 crab_category = "immature_female",
+                                 years = years) %>%
+  select(YEAR, ABUNDANCE, CATEGORY) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE_IMMFEM = as.numeric(ABUNDANCE/1e6)) %>%
+  rename_with(tolower) %>%
+  select(-category, -abundance) %>%
+  mutate(species = "tanner")
+
+
+#add female abundance to small male abundance for both species 
+snow_immature <- calc_bioabund(crab_data = snow,
+                                 species = "SNOW",
+                                 region = "EBS",
+                                 sex = "male",
+                                 size_min = 30,
+                                 size_max = 60,
+                                 years = years) %>%
+  select(YEAR, ABUNDANCE) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE_SMMALE = as.numeric(ABUNDANCE/1e6)) %>%
+  rename_with(tolower) %>%
+  select(-abundance) %>%
+  mutate(species = "snow") %>%
+  full_join(snow_imm_female) %>%
+  group_by(year) %>%
+  mutate(abundance = abundance_smmale + abundance_immfem,
+         category = "immature") %>%
+  select(-abundance_smmale, -abundance_immfem)
+
 #Plot
-snow_abun_female %>%
-  filter(category != "NA") %>%
-  ggplot(aes(x = year, y = abundance, color=category)) +
+snow_immature %>%
+  ggplot(aes(x = year, y = abundance)) +
   geom_point() +
   geom_line()+
   labs(y = "Number of crab (millions)", x = "") +
   theme_bw()
 
-#calculate snow crab large male abundance timeseries 
-snow_abun_lgmale <- calc_bioabund(crab_data = snow,
-                                  species = "SNOW",
-                                  region = "EBS",
-                                  sex = "male",
-                                  size_min = 95,
-                                  years = years) %>%
-  select(YEAR, ABUNDANCE, ABUNDANCE_CI) %>%
+tanner_immature <- calc_bioabund(crab_data = tanner,
+                               species = "TANNER",
+                               spatial_level = "region",
+                               sex = "male",
+                               size_min = 30,
+                               size_max = 60,
+                               years = years) %>%
+  select(YEAR, ABUNDANCE) %>%
   right_join(., expand.grid(YEAR = years)) %>%
   arrange(YEAR) %>%
-  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6),
-         ABUNDANCE_CI = as.numeric(ABUNDANCE_CI/1e6)) %>%
+  mutate(ABUNDANCE_SMMALE = as.numeric(ABUNDANCE/1e6)) %>%
   rename_with(tolower) %>%
-  mutate(species = "snow",
-         category = "large_male")
+  select(-abundance) %>%
+  mutate(species = "tanner") %>%
+  full_join(tanner_imm_female) %>%
+  group_by(year) %>%
+  mutate(abundance = abundance_smmale + abundance_immfem,
+         category = "immature") %>%
+  select(-abundance_smmale, -abundance_immfem)
 
 #Plot
-snow_abun_lgmale  %>%
+tanner_immature %>%
+  ggplot(aes(x = year, y = abundance)) +
+  geom_point() +
+  geom_line()+
+  labs(y = "Number of crab (millions)", x = "") +
+  theme_bw()
+
+#-----------------------------------------------
+# Mature female/large male abundance timeseries
+#--------------------------------------------------
+
+#calculate mature female/lg male snow crab abundance 
+snow_lg_mat <- calc_bioabund(crab_data = snow,
+                                species = "SNOW",
+                                region = "EBS",
+                                crab_category = c("mature_female",
+                                                  "large_male"),
+                                years = years) %>%
+  select(YEAR, ABUNDANCE, CATEGORY) %>%
+  pivot_wider(names_from = CATEGORY, values_from = ABUNDANCE) %>%
+  group_by(YEAR) %>%
+  mutate(ABUNDANCE = sum(large_male + mature_female)) %>%
+  select(YEAR, ABUNDANCE) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6)) %>%
+  rename_with(tolower) %>%
+  mutate(category = "maturefem_lgmale",
+         species = "snow")
+
+#Plot
+snow_lg_mat  %>%
   filter(category != "NA") %>%
   ggplot(aes(x = year, y = abundance)) +
   geom_point() +
@@ -198,12 +329,46 @@ snow_abun_lgmale  %>%
   labs(y = "Number of crab (millions)", x = "") +
   theme_bw()
 
-#join all abundance datasets
-hyb_abun %>%
+#calculate mature female/lg male tanner crab abundance 
+tanner_lg_mat <- calc_bioabund(crab_data = tanner,
+                             species = "TANNER",
+                             region = "EBS",
+                             spatial_level = "region",
+                             crab_category = c("mature_female",
+                                               "large_male"),
+                             years = years) %>%
+  select(YEAR, ABUNDANCE, CATEGORY) %>%
+  pivot_wider(names_from = CATEGORY, values_from = ABUNDANCE) %>%
+  group_by(YEAR) %>%
+  mutate(ABUNDANCE = sum(large_male + mature_female)) %>%
+  select(YEAR, ABUNDANCE) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
+  arrange(YEAR) %>%
+  mutate(ABUNDANCE = as.numeric(ABUNDANCE/1e6)) %>%
+  rename_with(tolower) %>%
+  mutate(category = "maturefem_lgmale",
+         species = "tanner")
+
+#Plot
+tanner_lg_mat  %>%
+  filter(category != "NA") %>%
+  ggplot(aes(x = year, y = abundance)) +
+  geom_point() +
+  geom_line()+
+  labs(y = "Number of crab (millions)", x = "") +
+  theme_bw()
+
+#-----------------------------
+# Join datasets and output
+#-----------------------------
+
+hyb_abun_dat %>%
   full_join(snow_abun_pop) %>%
   full_join(tanner_abun_pop) %>%
-  full_join(snow_abun_female) %>%
-  full_join(snow_abun_lgmale) %>%
+  full_join(snow_lg_mat) %>%
+  full_join(tanner_lg_mat) %>%
+  full_join(snow_immature) %>%
+  full_join(tanner_immature) %>%
   select(-abundance_ci) -> abun_dat
 
 #Write output 

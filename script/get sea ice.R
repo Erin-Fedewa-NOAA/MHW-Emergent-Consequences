@@ -1,6 +1,6 @@
 # Calculate Bering Sea (EBS and NBS) average sea ice concentration
 
-#Author: Erin Fedewa
+#Author: E. Ryznar
 
 #Notes:
 #In 2025, NSIDC sea ice extent index was replaced with average sea ice concentration from ERA5 reanalysis
