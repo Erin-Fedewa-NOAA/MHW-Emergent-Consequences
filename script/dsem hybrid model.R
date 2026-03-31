@@ -1,4 +1,4 @@
-#Test a hybrid model to examine causal linkages between the
+#Fit a dsem model to examine causal linkages between the
 #MHW and hybrid abundance increase
 
 #Specifically, we'll test the following causal pathways:

@@ -1,4 +1,4 @@
-#Test a tanner crab model to examine causal linkages between the
+#Fit a dsem model to examine causal linkages between the
 #MHW and tanner abundance increase
 
 #Specifically, we'll test the following causal pathways:
@@ -12,13 +12,12 @@
   #Mechanism: snow crab collapse results in competitive release/niche & habitat expansion
   #Hypothesized lags to test: 1-3 years 
 
-#Approach: because each new dsem model produces new parameters (dynamic mapping), if
+#Approach: because each dsem model fit produces new parameters (dynamic mapping), if
   #you don't reset starting values each iteration, optimizers reuse previous parameter 
-  #values, which causes NA or singular matrix errors when trying to loop through lags and 
-  #refit models while fixing delta0 and observation error. It's long & clunky,
-  #but instead of a loop we'll 1) evaluate lags for each causal link first by iteratively 
-  #refitting models and comparing with AIC, 2) do the same for each causal link, and 3) once a lag 
-  #structure is selected, use this to fit a final Tanner crab model  
+  #values, which causes NA or singular matrix errors when looping through lags and 
+  #refitting models. It's long & clunky, but instead of a loop we'll 1) evaluate lags for each 
+  #causal link first by iteratively refitting models and comparing with AIC, 2) do the same 
+  #for each causal link, and 3) use best lag structure to fit a final Tanner crab model  
 
 
 #Author: EJF
@@ -82,12 +81,11 @@ plot_histo <- function(data) {
 
 plot_histo(dat_tanner %>% select(-year))
 
-#Normalize and standardize all variables 
+#Scale all variables for dsem
 vars <- c("sea_ice",
           "snow_abundance",
           "tanner_abundance")
 
-#And center covariates
 tanner_data <- dat_tanner %>%
   mutate(across(all_of(c(vars)), ~ as.numeric(scale(.)))) 
 
@@ -438,7 +436,7 @@ ggplot(est_all_icetosnow, aes(x = lag, y = Estimate, fill = lag)) +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
-#lag 1 best supported by AIC, but no real difference between the two again
+#lag 1 best supported by AIC, but very small difference between the two again
 
 #############################################################
 #-------------------------------------------
@@ -453,7 +451,7 @@ sem_lag1_stt <- "
   tanner_abundance -> tanner_abundance, 1, ar_tanner
 
   # Causal pathways
-  sea_ice -> tanner_abundance, 5, icetotanner
+  sea_ice -> tanner_abundance, 1, icetotanner
   sea_ice -> snow_abundance, 1, icetosnow
   snow_abundance -> tanner_abundance, 1, snowtotanner"
 
@@ -464,7 +462,7 @@ sem_lag2_stt <- "
   tanner_abundance -> tanner_abundance, 1, ar_tanner
 
    # Causal pathways
-  sea_ice -> tanner_abundance, 5, icetotanner
+  sea_ice -> tanner_abundance, 1, icetotanner
   sea_ice -> snow_abundance, 1, icetosnow
   snow_abundance -> tanner_abundance, 2, snowtotanner"
 
@@ -475,7 +473,7 @@ sem_lag3_stt <- "
   tanner_abundance -> tanner_abundance, 1, ar_tanner
 
    # Causal pathways
-  sea_ice -> tanner_abundance, 5, icetotanner
+  sea_ice -> tanner_abundance, 1, icetotanner
   sea_ice -> snow_abundance, 1, icetosnow
   snow_abundance -> tanner_abundance, 3, snowtotanner"
 
@@ -599,9 +597,9 @@ sm_lag1_stt <- as.data.frame(summary(fit_lag1_stt))
 sm_lag2_stt <- as.data.frame(summary(fit_lag2_stt))
 sm_lag3_stt <- as.data.frame(summary(fit_lag3_stt))
 
-est_lag1_stt <- sm_lag1_stt %>% filter(name == "icetosnow") %>% mutate(lag = "Lag 1")
-est_lag2_stt <- sm_lag2_stt %>% filter(name == "icetosnow") %>% mutate(lag = "Lag 2")
-est_lag3_stt <- sm_lag3_stt %>% filter(name == "icetosnow") %>% mutate(lag = "Lag 3")
+est_lag1_stt <- sm_lag1_stt %>% filter(name == "snowtotanner") %>% mutate(lag = "Lag 1")
+est_lag2_stt <- sm_lag2_stt %>% filter(name == "snowtotanner") %>% mutate(lag = "Lag 2")
+est_lag3_stt <- sm_lag3_stt %>% filter(name == "snowtotanner") %>% mutate(lag = "Lag 3")
 
 # Combine into one data frame
 est_all_snowtotanner <- bind_rows(est_lag1_stt, est_lag2_stt, est_lag3_stt)
@@ -692,7 +690,7 @@ sem_final <- "
   sea_ice -> sea_ice, 1, ar_seaice
   snow_abundance -> snow_abundance, 1, ar_snow
   tanner_abundance -> tanner_abundance, 1, ar_tanner
-
+  
   # Causal pathways
   sea_ice -> tanner_abundance, 1, icetotanner
   sea_ice -> snow_abundance, 1, icetosnow
@@ -742,6 +740,14 @@ fit_dsem <- dsem(sem=sem_final, tsdata=data,
 
 summary(fit_dsem)
 
+#extract estimate and p-value for causal pathways 
+paths_of_interest <- subset(summary(fit_dsem),
+  (first == "sea_ice" & second == "tanner_abundance") |
+    (first == "sea_ice" & second == "snow_abundance") |
+    (first == "snow_abundance" & second == "tanner_abundance"))
+
+paths_of_interest[, c("first", "second", "lag", "Estimate", "Std_Error", "p_value")]
+
 #----------------------------------------
 # Final Tanner crab model diagnostics
 #----------------------------------------
@@ -753,61 +759,93 @@ fit_dsem$sdrep
 #check maximum final gradient- should be < 0.001
 max(fit_dsem$sdrep$gradient.fixed)
 
-#Identifiablity/overfitting
+#Identifiability/overfitting
 fit_dsem$sdrep$pdHess # TRUE = good here
 summary(fit_dsem$sdrep, "fixed")[, "Std. Error"] #shouldn't be any NA/NaN
 
 #Residual diagnostics:
 
-resid <- residuals(fit_dsem)
-
-#plot fitted vrs residuals
-plot(fitted(fit_dsem), resid)
-abline(h = 0, col = "red")
+r <- residuals(fit_dsem)
 
 #autocorrelation of residuals
-acf(resid[, "tanner_abundance"])
-acf(resid[, "snow_abundance"])
-acf(resid[, "sea_ice"])
-acf(residuals(fit_dsem))
+acf(na.omit(r[, 1]))
+acf(na.omit(r[, 2]))
+acf(na.omit(r[, 3]))
 
+#normality of residuals
+par(mfrow = c(1,3))
 
-sim <- simulate(fit_dsem)
-plot(data[, "tanner_abundance"], type = "l")
-lines(sim[, "tanner_abundance"], col = "blue")
+for(i in 1:ncol(r)) {
+  qqnorm(r[, i], main = colnames(r)[i])
+  qqline(r[, i], col = "red")
+}
+#approximately normal, but some deviations in tails 
 
-# sample-based quantile residuals
-samples = loo_residuals(fit_dsem, what="samples", track_progress=FALSE)
-which_use = which(!is.na(tanner_data))
-fitResp = loo_residuals( fit_dsem, what="loo", track_progress=FALSE)[,'est']
-simResp = apply(samples, MARGIN=3, FUN=as.vector)[which_use,]
+# DHARMa residuals- build separately for each variable
+samples <- loo_residuals(fit_dsem, what = "samples", track_progress = FALSE)
+loo <- loo_residuals(fit_dsem, what = "loo", track_progress = FALSE)
+data_mat <- as.matrix(data)
 
-# Build and display DHARMa object
-res = DHARMa::createDHARMa(
-  simulatedResponse = simResp,
-  observedResponse = unlist(tanner_data)[which_use],
-  fittedPredictedResponse = fitResp )
-plot(res)
-#looks good
+#sea ice
+sim_sea <- samples[, 1, ]   # 38 yrs × 100 simulations
+loo_sea <- subset(loo, Var2 == "sea_ice")
+
+res_sea <- DHARMa::createDHARMa(
+  simulatedResponse = sim_sea,
+  observedResponse = loo_sea$obs,
+  fittedPredictedResponse = loo_sea$est)
+
+plot(res_sea)
+
+#snow crab
+loo_snow <- subset(loo, Var2 == "snow_abundance")
+
+fit_snow <- loo_snow$est
+obs_snow <- loo_snow$obs
+sim_snow <- samples[, 2, ]
+
+sim_snow <- sim_snow[1:length(fit_snow), ]
+
+res_snow <- DHARMa::createDHARMa(
+  simulatedResponse = sim_snow,
+  observedResponse = obs_snow,
+  fittedPredictedResponse = fit_snow)
+
+plot(res_snow)
+
+#tanner crab
+loo_tan <- subset(loo, Var2 == "tanner_abundance")
+
+fit_tan <- loo_tan$est
+obs_tan <- loo_tan$obs
+sim_tan <- samples[, 3, ]
+
+sim_tan <- sim_tan[1:length(fit_tan), ]
+
+res_tan <- DHARMa::createDHARMa(
+  simulatedResponse = sim_tan,
+  observedResponse = obs_tan,
+  fittedPredictedResponse = fit_tan)
+
+tanner_dharma <- plot(res_tan)
+
+#These look.....real bad.......
 
 # Calculate total effects
-effect = total_effect(fit_dsem, n_lags = 6)
+effect = total_effect(fit_dsem, n_lags = 7)
 #specifying n+1 longest lag so sparse matrix doesn't have NAs
 
 # Plot total effect
 ggplot( effect) + 
   geom_bar(aes(lag, total_effect, fill=lag), stat='identity', col='black', position='dodge' ) +
   facet_grid( from ~ to  )
-#if we test an iid model structure above (ie switch 1's in AR1 terms to 0) there shouldn't
-#be n-1 lags, only the specified lag
 #note that for response variables with direct and indirect causal links, we see total
 #effects for each specified lag/causal path
 
-#relative importance of variables as predictors of female size structure
+#relative importance of variables as predictors of tanner abundance
 partition_variance(fit_dsem,
-                   which_response = "hybrid_abundance",
+                   which_response = "tanner_abundance",
                    n_times = 10 )
-#hmm maybe this is in development version of dsem only? 
 
 #-----------------------------------------------------------
 #Plot final Tanner crab model fit
@@ -877,7 +915,7 @@ plot_fit(data, fit_dsem, start_year = start_year)
 
 #and now plot fitted DAG
 plot(as_fitted_DAG(fit_dsem, what = "path_coefficient"))
-plot(as_fitted_DAG(fit_dsem_auto, what = "p_value"), type = "width")
+plot(as_fitted_DAG(fit_dsem_auto, what = c("Estimate", "Std_Error", "p_value")), type = "width")
 #need to follow up on this- dsem output doesn't retain path names that 
   #as_fitted_DAG() function needs since we manually specified map and par
 
