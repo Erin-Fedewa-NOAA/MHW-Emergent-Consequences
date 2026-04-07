@@ -1,0 +1,10 @@
+"path","lag","name","start","parameter","first","second","direction","Estimate","Std_Error","z_value","p_value"
+"sea_ice -> sea_ice",1,"ar_seaice",NA,1,"sea_ice","sea_ice","1",0.459971510738875,0.153572515459275,2.99514212789497,0.00274316988789539
+"log_snow_abundance -> log_snow_abundance",1,"ar_snow",NA,2,"log_snow_abundance","log_snow_abundance","1",0.647024676403161,0.120657500709065,5.36249029360633,8.20823804963436e-08
+"log_tanner_abundance -> log_tanner_abundance",1,"ar_tanner",NA,3,"log_tanner_abundance","log_tanner_abundance","1",0.776455279413767,0.0840652362811117,9.23634208101579,2.55068068484232e-20
+"sea_ice -> log_tanner_abundance",1,"icetotanner",NA,4,"sea_ice","log_tanner_abundance","1",0.0437332287542192,0.0841957194573121,0.519423422426983,0.603465501255915
+"sea_ice -> log_snow_abundance",1,"icetosnow",NA,5,"sea_ice","log_snow_abundance","1",0.292382187949429,0.1211543433542,2.41330339346265,0.0158086542172929
+"log_snow_abundance -> log_tanner_abundance",3,"snowtotanner",NA,6,"log_snow_abundance","log_tanner_abundance","1",-0.404967224151264,0.0857205916655646,-4.72427005323561,2.3094336042385e-06
+"sea_ice <-> sea_ice",0,"V[sea_ice]",NA,7,"sea_ice","sea_ice","2",0.890341436497484,0.105019678859339,8.47785335251297,2.29386839544324e-17
+"log_tanner_abundance <-> log_tanner_abundance",0,"V[log_tanner_abundance]",NA,8,"log_tanner_abundance","log_tanner_abundance","2",-0.446771535166669,0.0577953605743611,-7.73023181664972,1.07350916407053e-14
+"log_snow_abundance <-> log_snow_abundance",0,"V[log_snow_abundance]",NA,9,"log_snow_abundance","log_snow_abundance","2",0.696333375621684,0.0834317060971253,8.3461481035886,7.05253591191142e-17

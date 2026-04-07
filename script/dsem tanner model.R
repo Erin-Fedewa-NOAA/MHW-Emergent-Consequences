@@ -1,3 +1,4 @@
+#Goals -----
 #Fit a dsem model to examine causal linkages between the
 #MHW and tanner abundance increase
 
@@ -36,19 +37,20 @@ library(TMB)
 library(knitr)
 library(kableExtra)
 library(phylopath)
+library(broom)
 
 #read in data
 sea_ice <- read.csv("./output/seaice_output.csv")
 crab_abund <- read.csv("./output/crab_abundance.csv")
 
-#----------------------------------
-# Define covariates and standardize
-#----------------------------------
+#-----------------------------------------#
+# Define covariates and standardize ---- 
+#-----------------------------------------#
 start_year = 1988
 
 #Note: because we're testing a max lag of 6 years, this workflow was originally tested 
-  #with a longer sea ice timeseries (1982+). We report sensitivities to this model specification
-  #in the paper, noting that the shorter sea ice timeseries was selected in order to 
+  #with a longer sea ice timeseries (1982+). We report sensitivities to this model,
+  #specification, noting that the shorter sea ice timeseries was selected in order to 
   #optimize latent state estimation of crab abundance timeseries 
 
 dat_tanner <- sea_ice %>%
@@ -73,21 +75,30 @@ dat_tanner %>%
 plot_histo <- function(data) {
   plots <- data %>%
     imap(~ ggplot(data, aes(x = .data[[.y]])) +
-           geom_histogram(bins = 30, fill = "skyblue", color = "black") +
-           labs(x = .y, y = "Frequency") +
+           geom_histogram(aes(y = after_stat(density)),
+                          bins = 30,
+                          fill = "skyblue", color = "black") +
+           geom_density(color = "red") +
+           labs(x = .y, y = "Density") +
            theme_minimal())
-  wrap_plots(plots)
+  patchwork::wrap_plots(plots)
 }
 
 plot_histo(dat_tanner %>% select(-year))
 
-#Scale all variables for dsem
+#Scale all variables and transform abundance variables 
 vars <- c("sea_ice",
-          "snow_abundance",
-          "tanner_abundance")
+          "snow_abundance", "log_snow_abundance",
+          "tanner_abundance", "log_tanner_abundance")
 
 tanner_data <- dat_tanner %>%
-  mutate(across(all_of(c(vars)), ~ as.numeric(scale(.)))) 
+  mutate(log_tanner_abundance = log(tanner_abundance),
+         log_snow_abundance = log(snow_abundance)) %>%
+  mutate(across(all_of(c(vars)), ~ as.numeric(scale(.)))) %>%
+  select(-tanner_abundance, -snow_abundance)
+
+#check distributions now
+plot_histo(tanner_data %>% select(-year))
 
 #Assess collinearity b/w variables
 tanner_data %>% 
@@ -95,7 +106,7 @@ tanner_data %>%
   cor(use = "pairwise.complete.obs") %>%
   corrplot(method="number")
 
-#plot all standardized variables
+#plot all standardized/transformed variables
 tanner_data %>%
   pivot_longer(cols = -year, names_to="variable", values_to="value") %>%
   ggplot(aes(year, value)) +
@@ -104,9 +115,9 @@ tanner_data %>%
   facet_wrap(~variable, scales = "free_y", nrow=3) +
   theme_bw()
 
-#-----------------------------
-#Prep data for dsem models
-#-----------------------------
+#-------------------------------#
+#Prep data for dsem models ----
+#-------------------------------#
 
 data <- tanner_data %>%
   select(-year) %>%
@@ -114,9 +125,9 @@ data <- tanner_data %>%
 
 family <- rep("normal", ncol(data))
 
-#--------------------------------
-# Test for DAG-data consistency
-#--------------------------------
+#---------------------------------------#
+# Test for DAG-data consistency ----
+#---------------------------------------#
 
 #download specified DAG from dagitty.net - conditional independencies are 
 #identified based on structure of DAG drawn in dagitty
@@ -161,38 +172,38 @@ ggdag_adjustment_set(tanner_dag, shadow = TRUE) +
 # be independent and not correlated shouldn't be connected by a node
 impliedConditionalIndependencies(tanner_dag)
 #our DAG doesn't imply any conditional independence relationships, and no
-  #d-separation claims exist b/c we have a direct sea ice to tanner path
+  #d-separation claims exist 
 
-#-------------------------------------------
-#Lag testing: sea ice -> tanner causal pathway
-#-------------------------------------------
+#----------------------------------------------------#
+#Lag testing: sea ice -> tanner causal pathway ----
+#----------------------------------------------------#
 
 #Define SEMs for each sea ice -> tanner lag
 sem_lag1_tanner <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
   # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 1, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 1, snowtotanner"
 
 sem_lag2_tanner <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
   # Causal pathways
-  sea_ice -> tanner_abundance, 2, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 1, snowtotanner"
+  sea_ice -> log_tanner_abundance, 2, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 1, snowtotanner"
 
-# -----------------------------
-# Fit Lag 1
-#-----------------------------
+# ----------------------------#
+# Fit Lag 1 ----
+#-----------------------------#
 #build model without running it (needed so we can modify TMB inputs)
 fit_build1_tanner <- dsem(
   sem = sem_lag1_tanner,
@@ -200,6 +211,9 @@ fit_build1_tanner <- dsem(
   family = family,
   estimate_delta0 = TRUE,
   control = dsem_control(run_model = FALSE))
+
+#Hessian warnings are expected from fit_build b/c parameters are at
+  #default/initial value
 
 #Extract parameters & map from full model
 pars1_tanner <- fit_build1_tanner$tmb_inputs$parameters
@@ -224,9 +238,9 @@ fit_lag1_tanner <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Fit Lag 2
-#-----------------------------
+#-----------------------------#
+# Fit Lag 2 ----
+#-----------------------------#
 fit_build2_tanner <- dsem(
   sem = sem_lag2_tanner,
   tsdata = data,
@@ -255,9 +269,9 @@ fit_lag2_tanner <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Compare models
-#-----------------------------
+#---------------------------------#
+# Compare ice/tanner models ----
+#---------------------------------#
 aic_values_icetotanner <- c(
   lag1 = AIC(fit_lag1_tanner),
   lag2 = AIC(fit_lag2_tanner))
@@ -269,9 +283,6 @@ loglik_values_icetotanner <- c(
 aic_values_icetotanner
 loglik_values_icetotanner
 
-#----------------------------------
-# Inspect causal pathways and plot
-#----------------------------------
 summary(fit_lag1_tanner)
 summary(fit_lag2_tanner)
 
@@ -300,39 +311,38 @@ ggplot(est_all_icetotanner, aes(x = lag, y = Estimate, fill = lag)) +
   theme(legend.position = "none")
 
 #Can't differentiate between models using AIC, and effect is small and insignificant 
-  #using either lag. Let's stick with 1 for model stability/consistency with snow crab
+  #using either lag. Let's stick with lag 1 for consistency with snow crab mechanism
 
-#############################################################
-#-------------------------------------------
-#Lag testing: sea ice -> snow causal pathway
-#-------------------------------------------
+#------------------------------------------------#
+#Lag testing: ice -> snow causal pathway ----
+#------------------------------------------------#
 
 #Define SEMs for each sea ice -> snow crab lag
 sem_lag1_snow <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
   # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 1, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 1, snowtotanner"
 
 sem_lag2_snow <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
    # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 2, icetosnow
-  snow_abundance -> tanner_abundance, 1, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 2, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 1, snowtotanner"
 
-# -----------------------------
-# Fit Lag 1
-#-----------------------------
+#-----------------------------#
+# Fit Lag 1 ----
+#-----------------------------#
 fit_build1_snow <- dsem(
   sem = sem_lag1_snow,
   tsdata = data,
@@ -362,9 +372,9 @@ fit_lag1_snow <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Fit Lag 2
-#-----------------------------
+#-----------------------------#
+# Fit Lag 2 ----
+#-----------------------------#
 fit_build2_snow <- dsem(
   sem = sem_lag2_snow,
   tsdata = data,
@@ -392,9 +402,9 @@ fit_lag2_snow <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Compare models
-#-----------------------------
+#---------------------------------#
+# Compare ice/snow models ----
+#---------------------------------#
 aic_values_icetosnow <- c(
   lag1 = AIC(fit_lag1_snow),
   lag2 = AIC(fit_lag2_snow))
@@ -406,9 +416,6 @@ loglik_values_icetosnow <- c(
 aic_values_icetosnow
 loglik_values_icetosnow
 
-#----------------------------------
-# Inspect causal pathways and plot
-#----------------------------------
 summary(fit_lag1_snow)
 summary(fit_lag2_snow)
 
@@ -436,50 +443,50 @@ ggplot(est_all_icetosnow, aes(x = lag, y = Estimate, fill = lag)) +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
-#lag 1 best supported by AIC, but very small difference between the two again
+#Again, lags are nearly identical, suggesting that lag 1 is effectively
+  #capturing cumulative/lagged effects at longer lag 2
 
-#############################################################
-#-------------------------------------------
-#Lag testing: snow -> tanner causal pathway
-#-------------------------------------------
+#--------------------------------------------------#
+#Lag testing: snow -> tanner causal pathway ----
+#--------------------------------------------------#
 
 #Define SEMs for each snow to tanner (stt) lag being tested
 sem_lag1_stt <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
   # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 1, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 1, snowtotanner"
 
 sem_lag2_stt <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
    # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 2, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 2, snowtotanner"
 
 sem_lag3_stt <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
 
    # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 3, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 3, snowtotanner"
 
-# -----------------------------
-# Fit Lag 1
-#-----------------------------
+# -----------------------------#
+# Fit Lag 1 ----
+#-----------------------------#
 fit_build1_stt <- dsem(
   sem = sem_lag1_stt,
   tsdata = data,
@@ -492,8 +499,8 @@ map1_stt  <- fit_build1_stt$tmb_inputs$map
 
 # Safe starting values
 n_vars <- ncol(data)
-pars1_stt$delta0_j <- rep(0.01, n_vars) #delta0
-pars1_stt$lnsigma_j <- rep(log(0.5), n_vars) #observation error
+pars1_stt$delta0_j <- rep(0, n_vars) #delta0
+pars1_stt$lnsigma_j <- rep(log(0.4), n_vars) #slightly smaller than above to improve stability
 map1_stt$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta1_stt <- length(pars1_stt$beta_z)
 pars1_stt$beta_z[(n_vars+1):n_beta1_stt] <- 0.05  # small lag starting values
@@ -509,9 +516,9 @@ fit_lag1_stt <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Fit Lag 2
-#-----------------------------
+#-----------------------------#
+# Fit Lag 2 ----
+#-----------------------------#
 fit_build2_stt <- dsem(
   sem = sem_lag2_stt,
   tsdata = data,
@@ -522,8 +529,8 @@ fit_build2_stt <- dsem(
 pars2_stt <- fit_build2_stt$tmb_inputs$parameters
 map2_stt  <- fit_build2_stt$tmb_inputs$map
 
-pars2_stt$delta0_j <- rep(0.01, n_vars)
-pars2_stt$lnsigma_j <- rep(log(0.5), n_vars)
+pars2_stt$delta0_j <- rep(0, n_vars)
+pars2_stt$lnsigma_j <- rep(log(0.4), n_vars)
 map2_stt$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta2 <- length(pars2_stt$beta_z)
 pars2_stt$beta_z[(n_vars+1):n_beta2] <- 0.05
@@ -539,9 +546,9 @@ fit_lag2_stt <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Fit Lag 3
-#-----------------------------
+#-----------------------------#
+# Fit Lag 3 ----
+#-----------------------------#
 fit_build3_stt <- dsem(
   sem = sem_lag3_stt,
   tsdata = data,
@@ -552,8 +559,8 @@ fit_build3_stt <- dsem(
 pars3_stt <- fit_build3_stt$tmb_inputs$parameters
 map3_stt  <- fit_build3_stt$tmb_inputs$map
 
-pars3_stt$delta0_j <- rep(0.01, n_vars)
-pars3_stt$lnsigma_j <- rep(log(0.5), n_vars)
+pars3_stt$delta0_j <- rep(0, n_vars)
+pars3_stt$lnsigma_j <- rep(log(0.4), n_vars)
 map3_stt$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta3 <- length(pars3_stt$beta_z)
 pars3_stt$beta_z[(n_vars+1):n_beta3] <- 0.05
@@ -569,9 +576,9 @@ fit_lag3_stt <- dsem(
     quiet = TRUE,
     getsd = TRUE))
 
-#-----------------------------
-# Compare models
-#-----------------------------
+#---------------------------------#
+# Compare snow/tanner models ----
+#---------------------------------#
 aic_values_snowtotanner <- c(
   lag1 = AIC(fit_lag1_stt),
   lag2 = AIC(fit_lag2_stt),
@@ -585,9 +592,6 @@ loglik_values_snowtotanner <- c(
 aic_values_snowtotanner
 loglik_values_snowtotanner
 
-#----------------------------------
-# Inspect causal pathways and plot
-#----------------------------------
 summary(fit_lag1_stt)
 summary(fit_lag2_stt)
 summary(fit_lag3_stt)
@@ -621,9 +625,9 @@ ggplot(est_all_snowtotanner, aes(x = lag, y = Estimate, fill = lag)) +
 
 #lag 3 best supported by AIC
 
-#----------------------------------------------------------------
-# Produce AIC table and combined plots for all 3 causal pathways 
-#----------------------------------------------------------------
+#---------------------------------------------------#
+# Model comparison for causal pathways ----
+#---------------------------------------------------#
 
 #create dataframe with all AIC scores
 aic_long <- bind_rows(
@@ -654,6 +658,13 @@ est_all <- bind_rows(
   est_all_icetosnow %>% mutate(Causal_Pathway = "Sea Ice → Snow"),
   est_all_snowtotanner %>% mutate(Causal_Pathway = "Snow → Tanner"))
 
+#Write as output so we don't have to rerun models to create lag figure
+est_all %>%
+  select(-1) %>%
+  mutate(Causal_Pathway = Causal_Pathway %>%
+           str_replace_all(" → ", " to ")) %>%
+  write.csv("./output/tanner_lags.csv")
+
 # Color palette (colorblind-friendly)
 lag_colors <- c(
   "Lag 1" = "#E69F00",
@@ -678,23 +689,21 @@ ggplot(est_all, aes(x = lag, y = Estimate, fill = lag)) +
   theme(legend.position = "none",
         strip.text = element_text(face = "bold", size = 10))
 
-##########################################################################
-
-#----------------------------------------------------------------
-# Fit final Tanner crab model 
-#----------------------------------------------------------------
+#---------------------------------------------------#
+# Fit final Tanner crab model ----
+#---------------------------------------------------#
 
 #define SEM based on best lag structure from above
 sem_final <- "
   # AR terms
   sea_ice -> sea_ice, 1, ar_seaice
-  snow_abundance -> snow_abundance, 1, ar_snow
-  tanner_abundance -> tanner_abundance, 1, ar_tanner
+  log_snow_abundance -> log_snow_abundance, 1, ar_snow
+  log_tanner_abundance -> log_tanner_abundance, 1, ar_tanner
   
   # Causal pathways
-  sea_ice -> tanner_abundance, 1, icetotanner
-  sea_ice -> snow_abundance, 1, icetosnow
-  snow_abundance -> tanner_abundance, 3, snowtotanner"
+  sea_ice -> log_tanner_abundance, 1, icetotanner
+  sea_ice -> log_snow_abundance, 1, icetosnow
+  log_snow_abundance -> log_tanner_abundance, 3, snowtotanner"
 
 #two-stage modeling fitting procedure: 
   ##initial first model run without delta0 (to improve starting values)
@@ -720,15 +729,15 @@ fit_build_final <- dsem(sem = sem_final, tsdata = data,
 pars_final <- fit_build_final$tmb_inputs$parameters
 map_final  <- fit_build_final$tmb_inputs$map
 
-# fix observation SD = 0.1
+# fix process variance SD = 0.1
 pars_final$lnsigma_j <- rep(log(0.1), ncol(data))
 
-# prevent estimation of observation SD
+# prevent estimation of SD
 map_final$lnsigma_j <- factor(rep(NA, ncol(data)))
 
-#run final model fit with Delta0 and fixed observation error
+#run final model fit with Delta0 and fixed SD
   #this final model estimates AR1 coefficients, lagged effects, 
-  #process variances and delta0 while keeping observation SD fixed
+  #and delta0 while keeping process SD fixed
   
 fit_dsem <- dsem(sem=sem_final, tsdata=data, 
                    family=family,
@@ -740,17 +749,49 @@ fit_dsem <- dsem(sem=sem_final, tsdata=data,
 
 summary(fit_dsem)
 
+#save as output
+write.csv(summary(fit_dsem), "./output/tanner_final_dsem_summary.csv", row.names = FALSE)
+
+#----------------------------------------#
+# Compute direct/indirect effects ----
+#----------------------------------------#
+
 #extract estimate and p-value for causal pathways 
 paths_of_interest <- subset(summary(fit_dsem),
-  (first == "sea_ice" & second == "tanner_abundance") |
-    (first == "sea_ice" & second == "snow_abundance") |
-    (first == "snow_abundance" & second == "tanner_abundance"))
+  (first == "sea_ice" & second == "log_tanner_abundance") |
+    (first == "sea_ice" & second == "log_snow_abundance") |
+    (first == "log_snow_abundance" & second == "log_tanner_abundance"))
 
 paths_of_interest[, c("first", "second", "lag", "Estimate", "Std_Error", "p_value")]
 
-#----------------------------------------
-# Final Tanner crab model diagnostics
-#----------------------------------------
+#indirect effect of sea ice
+icetosnow <- paths_of_interest %>%
+  filter((first == "sea_ice" & second == "log_snow_abundance")) %>%
+  pull(Estimate)
+
+snowtotanner <- paths_of_interest %>%
+  filter((first == "log_snow_abundance" & second == "log_tanner_abundance")) %>%
+  pull(Estimate)
+
+indirect = icetosnow * snowtotanner #-0.11
+
+#Direct effect of sea ice
+icetotanner <- paths_of_interest %>%
+  filter((first == "sea_ice" & second == "log_tanner_abundance")) %>%
+  pull(Estimate)
+direct = icetotanner #0.04
+
+#total effect of sea ice
+total = indirect + icetotanner #-0.07
+
+#relative importance of direct vrs indirect effect
+prop_indirect = abs(indirect) / (abs(indirect) + abs(direct))
+#overall, sea ice has a negative effect on tanner crab, and ~73% of the total 
+  #effect is driven by the indirect pathway
+
+#-------------------------------------------#
+# Final Tanner crab model diagnostics ----
+#-------------------------------------------#
 #Convergence diagnostics:
 
 #Hessian/SE - should be no hessian warnings or NA SE estimates
@@ -765,93 +806,74 @@ summary(fit_dsem$sdrep, "fixed")[, "Std. Error"] #shouldn't be any NA/NaN
 
 #Residual diagnostics:
 
-r <- residuals(fit_dsem)
+res <- residuals(fit_dsem)
 
 #autocorrelation of residuals
-acf(na.omit(r[, 1]))
-acf(na.omit(r[, 2]))
-acf(na.omit(r[, 3]))
+acf(na.omit(res[, 1]))
+acf(na.omit(res[, 2]))
+acf(na.omit(res[, 3]))
 
 #normality of residuals
 par(mfrow = c(1,3))
 
-for(i in 1:ncol(r)) {
-  qqnorm(r[, i], main = colnames(r)[i])
-  qqline(r[, i], col = "red")
-}
+for(i in 1:ncol(res)) {
+  qqnorm(res[, i], main = colnames(res)[i])
+  qqline(res[, i], col = "red")}
 #approximately normal, but some deviations in tails 
 
-# DHARMa residuals- build separately for each variable
-samples <- loo_residuals(fit_dsem, what = "samples", track_progress = FALSE)
-loo <- loo_residuals(fit_dsem, what = "loo", track_progress = FALSE)
-data_mat <- as.matrix(data)
+#Latent State Diagnostics:
 
-#sea ice
-sim_sea <- samples[, 1, ]   # 38 yrs × 100 simulations
-loo_sea <- subset(loo, Var2 == "sea_ice")
+#extract all latent states
+states_vec <- fit_dsem$sdrep$value[names(fit_dsem$sdrep$value) == "z_tj"]
+  #each element = one state (time x variable)
 
-res_sea <- DHARMa::createDHARMa(
-  simulatedResponse = sim_sea,
-  observedResponse = loo_sea$obs,
-  fittedPredictedResponse = loo_sea$est)
+#reshape into matrix 
+n_time <- nrow(data)
+n_vars <- 3
+states_mat <- matrix(states_vec, nrow = n_time, ncol = n_vars, byrow = FALSE)
+colnames(states_mat) <- c("sea_ice", "log_tanner_abundance", "log_snow_abundance")
 
-plot(res_sea)
+#extract variables
+obs_ice   <- data[, "sea_ice"]
+obs_tanner <- data[, "log_tanner_abundance"]
+obs_snow  <- data[, "log_snow_abundance"]
 
-#snow crab
-loo_snow <- subset(loo, Var2 == "snow_abundance")
+#latent vrs observed: tanner abundance
+df_plot <- data.frame(
+  time = 1:nrow(data),
+  observed = obs_tanner,
+  latent = states_mat[, "log_tanner_abundance"])
 
-fit_snow <- loo_snow$est
-obs_snow <- loo_snow$obs
-sim_snow <- samples[, 2, ]
+ggplot(df_plot, aes(x = time)) +
+  geom_line(aes(y = observed), color = "black", linewidth = 0.8) +
+  geom_line(aes(y = latent), color = "blue", linewidth = 0.8) +
+  theme_bw() +
+  labs(y = "Log Tanner abundance",
+       title = "Observed vs Latent State")
+#this is probably expected since we fixed SD?
+  #ie model is estimating trend vrs latent process noise 
 
-sim_snow <- sim_snow[1:length(fit_snow), ]
+#residual vrs fitted: tanner abundance
+res_tanner <- obs_tanner - states_mat[, "log_tanner_abundance"]
 
-res_snow <- DHARMa::createDHARMa(
-  simulatedResponse = sim_snow,
-  observedResponse = obs_snow,
-  fittedPredictedResponse = fit_snow)
+df_res <- data.frame(
+  fitted = states_mat[, "log_tanner_abundance"],
+  res = res_tanner)
 
-plot(res_snow)
+ggplot(df_res, aes(x = fitted, y = res)) +
+  geom_point(alpha = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_bw()
+#looks good 
 
-#tanner crab
-loo_tan <- subset(loo, Var2 == "tanner_abundance")
+#Would be worth following up on these, there are very few published diagnostics
+  #in the dsem package currently 
 
-fit_tan <- loo_tan$est
-obs_tan <- loo_tan$obs
-sim_tan <- samples[, 3, ]
+#-------------------------------------------------#
+#Plot final Tanner crab model fit ----
+#-------------------------------------------------#
 
-sim_tan <- sim_tan[1:length(fit_tan), ]
-
-res_tan <- DHARMa::createDHARMa(
-  simulatedResponse = sim_tan,
-  observedResponse = obs_tan,
-  fittedPredictedResponse = fit_tan)
-
-tanner_dharma <- plot(res_tan)
-
-#These look.....real bad.......
-
-# Calculate total effects
-effect = total_effect(fit_dsem, n_lags = 7)
-#specifying n+1 longest lag so sparse matrix doesn't have NAs
-
-# Plot total effect
-ggplot( effect) + 
-  geom_bar(aes(lag, total_effect, fill=lag), stat='identity', col='black', position='dodge' ) +
-  facet_grid( from ~ to  )
-#note that for response variables with direct and indirect causal links, we see total
-#effects for each specified lag/causal path
-
-#relative importance of variables as predictors of tanner abundance
-partition_variance(fit_dsem,
-                   which_response = "tanner_abundance",
-                   n_times = 10 )
-
-#-----------------------------------------------------------
-#Plot final Tanner crab model fit
-#-----------------------------------------------------------
-
-#build function to plot final model fit
+#build function to plot each fitted variable
   #function revised from C. Monnahan plot_fit function
 plot_fit <- function(Y, fit, start_year = NULL){
   
@@ -863,7 +885,7 @@ plot_fit <- function(Y, fit, start_year = NULL){
   sd_list <- as.list(fit$sdrep, what = "Std.")
   SD <- sd_list$x_tj
   
-  #this is needed to prevent NA's from being offset due to missing data
+  #create time variable for missing data
   if (is.null(start_year)) {
     if (!is.null(rownames(Y))) {
       years <- as.numeric(rownames(Y))
@@ -919,27 +941,97 @@ plot(as_fitted_DAG(fit_dsem_auto, what = c("Estimate", "Std_Error", "p_value")),
 #need to follow up on this- dsem output doesn't retain path names that 
   #as_fitted_DAG() function needs since we manually specified map and par
 
-#-----------------------------------------------------------
-# Compute % variance explained for each causal pathway
-#-----------------------------------------------------------
+#-------------------------------------------#
+# Compute cumulative effects ----
+#-------------------------------------------#
 
+#lag/cumulative effects plots:
+  #lag: defines when the effect enters the system
+  #variance partitioning over time shows how long a lag's influence persists 
 
+# Calculate cumulative lagged effects
+  #ie if variable X changes at time t, what is the cumulative effect of variable Y 
+  #after lag k, accounting for direct + indirect pathways
+effect = total_effect(fit_dsem, n_lags = 6) 
 
+# Plot total effect
+ggplot( effect) + 
+  geom_bar(aes(lag, total_effect, fill=lag), stat='identity', col='black', position='dodge' ) +
+  facet_grid( from ~ to  )
+#snow->tanner strong negative delayed effect, and biological responses appear to be
+  #delayed and cumulative 
 
+#relative importance of variables as predictors of tanner abundance
+  #i.e. at each time step, where proportion of tanner crab variability is coming from
+partition_variance(fit_dsem,
+                   which_response = "log_tanner_abundance",
+                   n_times = 10 )
+#tanner crab variance primarily driven by internal population dynamics at short lags, 
+  #but indirect ice->snow->tanner pathway has a strong influence, and accumulates over time
 
+#plot
+var_df <- as.data.frame(partition_variance(fit_dsem,
+                                           which_response = "log_tanner_abundance",
+                                           n_times = 10)$proportion_variance_explained)
 
+var_df$time <- 1:nrow(var_df)
 
+# Pivot longer
+var_long <- var_df %>%
+  pivot_longer(cols = c(sea_ice, log_snow_abundance, log_tanner_abundance),
+               names_to = "Component",
+               values_to = "Proportion")
 
-#-----------------------------------------------------------
-# Evaluate sensitivity to changes in fixed observation error
-#-----------------------------------------------------------
+# Plot
+ggplot(var_long, aes(x = time, y = Proportion, fill = Component)) +
+  geom_area(alpha = 0.8, color = "black") +
+  labs(x = "Time step",
+       y = "Proportion of variance explained",
+       fill = "Component",
+       title = "Variance partitioning of Tanner crab dynamics") +
+  theme_minimal()
+
+#second view
+ggplot(var_long, aes(x = time, y = Proportion, color = Component)) +
+  geom_line(size = 1.2) +
+  geom_point() +
+  labs(x = "Time step",
+       y = "Proportion of Tanner crab variance explained",
+       title = "Tanner crab variance contributions over time") +
+  theme_minimal()
+
+#plot at final time step 10 
+var_df %>%
+  filter(time == 10) %>%
+  pivot_longer(cols = c(sea_ice, log_snow_abundance, log_tanner_abundance),
+               names_to = "Component",
+               values_to = "Proportion") %>%
+  ggplot(aes(x = Component, y = Proportion, fill = Component)) +
+  geom_col() +
+  ylim(0,1) +
+  theme_minimal() +
+  labs(title = "Variance partitioning at equilibrium",
+       y = "Proportion of variance explained")
+
+#extract at final time step
+var_df %>%
+  filter(time == max(time))
+#at time step 10, AR explains 30%, snow abundance explains 54% and sea ice
+  #explains 16% of tanner crab abundance
+
+#note that for DSEM we don't have a single global Rsq like a regression model because
+  #goodness of fit is multi-dimensional 
+
+#-----------------------------------------------------------#
+# Evaluate sensitivity to fixed observation error ----
+#-----------------------------------------------------------#
 
 #test plausible range of fixed values
-obs_sd_values <- c(0.1, 0.2, 0.3, 0.4)
+obs_sd_values <- c(0.1, 0.2, 0.3, 0.4, 0.5)
 
 results_list <- list()
 
-#loop through values
+#loop through values and refit final model
 for (i in seq_along(obs_sd_values)) {
   
   sd_val <- obs_sd_values[i]
@@ -987,87 +1079,69 @@ ggplot(sensitivity_results, aes(x = obs_sd, y = Estimate, color = name)) +
        color = "Path") +
   theme_minimal()
 
-#The sea ice -> snow crab linkage seems most sensitive to changes in fixed 
-  #observation error- a positive effect exists at all tested values, but 
-  #the effect is weaker and non-significant when accounting for higher uncertainty (>0.2)
-  #Other two pathways are robust to changes in observation SD
+#Both ice->snow and snow->tanner pathways are robust to changes in process variance
 
-#-------------------------------------------
-# Monte Carlo Simulation-based validation
-#-------------------------------------------
+#-------------------------------------------------#
+# Monte Carlo Simulation-based validation ----
+#-------------------------------------------------#
 
 #Here, we'll simulate data from final Tanner dsem model, refit the model to
   #each simulated dataset, and compare parameter estimates to true values to check
   #whether the fitted model can recover its own parameters when new data is simulated
 
 simTestDSEM <- function(fitDSEM, sem, n_sim, start, family) {
-  
-  DSEMlist <- list()
-  
-  for (i in 1:n_sim) {
     
-    # --- 1. Simulate data from fitted model ---
-    simDSEM <- simulate(fitDSEM, resimulate_gmrf = TRUE, fill_missing = TRUE)
+    DSEMlist <- list()
     
-    try({
+    for (i in 1:n_sim) {
       
-      sim_data <- simDSEM[[1]]
+      # --- 1. Simulate data ---
+      simDSEM <- simulate(fitDSEM, resimulate_gmrf = TRUE, fill_missing = TRUE)
       
-      # --- 2. Build model (no run yet) ---
-      fit_build <- dsem(
-        sem = sem,
-        tsdata = ts(sim_data, start = start),
-        family = family,
-        estimate_delta0 = TRUE,
-        control = dsem_control(run_model = FALSE))
-      
-      pars <- fit_build$tmb_inputs$parameters
-      map  <- fit_build$tmb_inputs$map
-      
-      # --- 3. Fix observation SD exactly as in final model ---
-      pars$lnsigma_j <- rep(log(0.1), ncol(sim_data))
-      map$lnsigma_j  <- factor(rep(NA, ncol(sim_data)))
-      
-      # --- 4. Refit model ---
-      tempFit <- dsem(
-        sem = sem,
-        tsdata = ts(sim_data, start = start),
-        family = family,
-        estimate_delta0 = TRUE,
-        control = dsem_control(
-          parameters = pars,
-          map = map,
-          quiet = TRUE,
-          getsd = FALSE))
-      
-      # --- 5. Extract beta (path) parameters ---
-      DSEMlist[[i]] <- tempFit$opt$par[names(tempFit$opt$par) == "beta_z"]
-      
-    }, silent = TRUE)
+      try({
+        
+        sim_data <- simDSEM[[1]]
+        
+        # --- 2. Build model (no run yet) ---
+        fit_build <- dsem(
+          sem = sem,
+          tsdata = ts(sim_data, start = start),
+          family = family,
+          estimate_delta0 = TRUE,
+          control = dsem_control(run_model = FALSE))
+        
+        pars <- fit_build$tmb_inputs$parameters
+        map  <- fit_build$tmb_inputs$map
+        
+        # --- 3. Fix observation SD ---
+        pars$lnsigma_j <- rep(log(0.1), ncol(sim_data))
+        map$lnsigma_j  <- factor(rep(NA, ncol(sim_data)))
+        
+        # --- 4. Refit model ---
+        tempFit <- dsem(
+          sem = sem,
+          tsdata = ts(sim_data, start = start),
+          family = family,
+          estimate_delta0 = TRUE,
+          control = dsem_control(
+            parameters = pars,
+            map = map,
+            quiet = TRUE,
+            getsd = FALSE))
+        
+        # --- 5. Extract parameters, fitted values and observed values ---
+        DSEMlist[[i]] <- list(
+          beta = tempFit$opt$par[names(tempFit$opt$par) == "beta_z"],
+          pred = predict(tempFit),
+          obs  = sim_data)
+      }, silent = TRUE)
+    }
+    
+    DSEMlist <- DSEMlist[!sapply(DSEMlist, is.null)]
+    
+    return(DSEMlist)
   }
   
-  # --- 6. Remove failed fits ---
-  DSEMlist <- DSEMlist[!sapply(DSEMlist, is.null)]
-  
-  # --- 7. Combine results ---
-  DSEMdf <- do.call(cbind, DSEMlist)
-  
-  DSEMdf <- DSEMdf %>%
-    as.data.frame() %>%
-    mutate(Path  = tempFit$sem_full$path[tempFit$sem_full$parameter != 0],
-           Param = tempFit$sem_full$name[tempFit$sem_full$parameter != 0]) %>%
-    pivot_longer(cols = starts_with("V"), names_to = NULL, values_to = "Beta")
-  
-  # --- 8. True parameter values ---
-  df <- data.frame(
-    Param = fitDSEM$sem_full$name[fitDSEM$sem_full$parameter != 0],
-    Path  = fitDSEM$sem_full$path[fitDSEM$sem_full$parameter != 0],
-    Beta_true = fitDSEM$opt$par[names(fitDSEM$opt$par) == "beta_z"]) %>%
-    inner_join(DSEMdf, by = c("Path", "Param"))
-  
-  return(df)
-}
-
 #now run 1000 simulations on our model 
 selfSimExp <- simTestDSEM(
   fitDSEM = fit_dsem,
@@ -1079,54 +1153,227 @@ selfSimExp <- simTestDSEM(
 #Hessian warnings are expected from fit_build b/c parameters are at
   #default/initial value
 
-#plot results
-selfSimExp %>%
-  filter(!str_starts(Param, "V")) %>%
-  ggplot(aes(x = Beta, y = Param)) +
-  geom_violin(fill = "lightblue", color = "black", scale = "width", trim = FALSE) +
-  geom_point(aes(x = Beta_true, y = Param), color = "red", size = 2) +
+#parameter recovery:
+beta_list <- lapply(selfSimExp, function(x) x$beta) #extract beta parameter vectors
+beta_mat <- do.call(cbind, beta_list) #rows = parameters, cols=simulations
+df <- as.data.frame(beta_mat)
+
+#add parameter labels from simulation
+df <- df %>%
+  mutate(Path  = fit_dsem$sem_full$path[fit_dsem$sem_full$parameter != 0],
+    Param = fit_dsem$sem_full$name[fit_dsem$sem_full$parameter != 0]) %>%
+  pivot_longer(cols = starts_with("V"), values_to = "Beta")
+
+#true parameters from fitted model
+df_true <- data.frame(
+  Param = fit_dsem$sem_full$name[fit_dsem$sem_full$parameter != 0],
+  Path  = fit_dsem$sem_full$path[fit_dsem$sem_full$parameter != 0],
+  Beta_true = fit_dsem$opt$par[names(fit_dsem$opt$par) == "beta_z"])
+
+#and join
+param_df <- df %>%
+  inner_join(df_true, by = c("Path", "Param"))
+#the v[] params are our process variance for each variable
+
+#plot parameter recovery results
+ggplot(param_df %>% filter(!str_starts(Param, "V")),
+       aes(x = Beta, y = Param)) +
+  geom_violin(fill = "lightblue", scale = "width") +
+  geom_point(aes(x = Beta_true), color = "red") +
   geom_vline(xintercept = 0) +
-  ggtitle("DSEM Parameter Recovery (fit_dsem)") +
-  theme_minimal()
+  theme_minimal() +
+  ggtitle("Parameter Recovery")
 
 #violin plots represent the distribution of estimated beta parameters across all 
   #simulations, red dot is true parameter value from original fitted model, 0 line
   #is "no effect"
-
 #Looks good! Model is recovering parameters reliably
 
-
 #compute bias and RMSE
-selfSimExp %>%
+param_df %>%
+  filter(!str_starts(Param, "V")) %>%
   group_by(Param) %>%
   summarise(bias = mean(Beta - Beta_true), #average error
              rmse = sqrt(mean((Beta - Beta_true)^2)), #bias + variance
              sd = sd(Beta)) #precision- variability across simulations
+#negligible bias, RMSE ~= SD, which tells us that error is random, not structural
 
 #check extreme failures, ie instability/identifiability issues
-selfSimExp %>%
+param_df %>%
+  filter(!str_starts(Param, "V")) %>%
   group_by(Param) %>%
   summarise(min = min(Beta),
             max = max(Beta))
-
-#negligible bias, RMSE ~= SD, which tells us that error is random, not structural
 #low to moderate uncertainty (expected in ecological timeseries)
 
+#Fit + residual diagnostics:
+  #i.e. can our simulations reproduce residual structure seen in our final 
+  #fitted model 
+
+#build residual dataset from simulations 
+sim_res_df <- selfSimExp %>%
+  imap(~ tibble(
+    sim_id = as.character(.y),
+    fitted = as.numeric(.x$pred),
+    resid  = as.numeric(.x$obs - .x$pred))) %>%
+  bind_rows()
+
+#extract residuals from final Tanner model fit
+fit_res_df <- tibble(
+  sim_id = "original",
+  fitted = as.numeric(predict(fit_dsem)),
+  resid  = as.numeric(residuals(fit_dsem)))
+
+#combine
+all_res_df <- bind_rows(
+  sim_res_df %>% mutate(type = "Simulated"),
+  fit_res_df %>% mutate(type = "Original"))
+
+#plot to compare residual distributions
+all_res_df %>%
+  ggplot(aes(x = resid, fill = type)) +
+  geom_density(alpha = 0.4) +
+  theme_minimal() +
+  labs(title = "Residual Distribution: Simulated vs Original")
+
+#plot autocorrelation of residuals
+acf_df <- all_res_df %>%
+  group_by(type, sim_id) %>%
+  summarise(acf1 = acf(resid, plot = FALSE, na.action = na.pass)$acf[2])
+
+orig_acf1 <- acf_df %>%
+  filter(type == "Original") %>%
+  pull(acf1)
+
+acf_df %>%
+  filter(type == "Simulated") %>%
+  ggplot(aes(x = acf1)) +
+  geom_histogram(bins = 30) +
+  geom_vline(xintercept = orig_acf1, color = "red", linewidth = 1) +
+  theme_minimal() +
+  labs(title = "Lag-1 residual autocorrelation")
+
+#residuals vrs fit plot
+ggplot() +
+  geom_point(data = all_res_df %>% filter(type == "Simulated"),
+    aes(fitted, resid),alpha = 0.05, color = "grey") +
+  geom_point(data = all_res_df %>% filter(type == "Original"),
+    aes(fitted, resid), color = "red", alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Residual vs Fitted: Simulated (grey) vs Original (red)")
 
 
+#calculate direct, indirect and total effect + 95% CI from simulation output
+  #b/c we couldn't propagate uncertainty from multiplicative indirect effects 
+  #when we did this earlier, so we can use our simulation to do so
 
+#compute effects
+effects <- param_df %>%
+  select(Param, Beta) %>%
+  group_by(Param) %>%
+  mutate(sim = row_number()) %>%   # create simulation ID
+  ungroup() %>%
+  pivot_wider(names_from = Param, values_from = Beta) %>%
+  mutate(direct   = icetotanner,
+          indirect = icetosnow * snowtotanner,
+          total    = direct + indirect)
 
+#calculate uncertainty
+effects %>%
+  summarise(
+    direct_mean = mean(direct),
+    direct_2.5perc  = quantile(direct, 0.025),
+    direct_97.5perc = quantile(direct, 0.975),
+    
+    indirect_mean = mean(indirect),
+    indirect_2.5perc  = quantile(indirect, 0.025),
+    indirect_97.5perc = quantile(indirect, 0.975),
+    
+    total_mean = mean(total),
+    total_2.5perc  = quantile(total, 0.025),
+    total_97.5perc = quantile(total, 0.975))
+#very similar to estimates from final model output!
 
+#-------------------------------------------#
+# Hindcasting validation ----
+#-------------------------------------------#
 
+#If we remove the MHW event (i.e. use 1988-2017 only), are inferred relationships
+  #still observed? i.e. are pathways persistent, or driven by MHW
 
+#filter dataset
+pre_mhw <- sea_ice %>%
+  select(year, Mar_Apr_ice_EBS_NBS) %>%
+  filter(year >= start_year) %>% 
+  rename(sea_ice = Mar_Apr_ice_EBS_NBS) %>%
+  full_join(crab_abund %>%
+              filter(category == "population_50mm_plus" & species != "hybrid") %>%
+              select(year, abundance, species) %>%
+              pivot_wider(names_from = "species", values_from = "abundance") %>%
+              rename(snow_abundance=snow, tanner_abundance=tanner)) %>%
+  filter(year <= 2017)
 
+#Scale all variables for dsem
+vars <- c("sea_ice",
+          "snow_abundance", "log_snow_abundance",
+          "tanner_abundance", "log_tanner_abundance")
 
+pre_mhw_data <- pre_mhw %>%
+  mutate(log_tanner_abundance = log(tanner_abundance),
+         log_snow_abundance = log(snow_abundance)) %>%
+  mutate(across(all_of(c(vars)), ~ as.numeric(scale(.)))) %>%
+  select(-tanner_abundance, -snow_abundance)
 
+#prep data for dsem model
+pre_mhw_data <- pre_mhw_data %>%
+  select(-year) %>%
+  ts()
 
+#run model using same specifications/lags from above 
 
+#two-stage modeling fitting procedure: 
+##initial first model run without delta0 (to improve starting values)
+fit0_pre <- dsem(sem = sem_final, tsdata = pre_mhw_data,
+             family = family, estimate_delta0 = FALSE,
+             control = dsem_control(quiet = FALSE, getsd = FALSE))
 
+# extract starting parameters
+parameters_pre <- fit0_pre$obj$env$parList()
 
+# add starting values for delta0
+parameters_pre$delta0_j <- rep(0, ncol(pre_mhw_data))
 
+#build model without running it
+#(needed so we can modify TMB inputs)
+fit_build_final_pre <- dsem(sem = sem_final, tsdata = pre_mhw_data,
+                        family = family,
+                        estimate_delta0 = TRUE,
+                        control = dsem_control(
+                          run_model = FALSE,
+                          parameters = parameters_pre))
+
+pars_final_pre <- fit_build_final_pre$tmb_inputs$parameters
+map_final_pre  <- fit_build_final_pre$tmb_inputs$map
+
+# fix observation SD = 0.1
+pars_final_pre$lnsigma_j <- rep(log(0.1), ncol(pre_mhw_data))
+
+# prevent estimation of observation SD
+map_final_pre$lnsigma_j <- factor(rep(NA, ncol(pre_mhw_data)))
+
+#run final model fit with Delta0 and fixed observation error
+fit_dsem_pre_mhw <- dsem(sem=sem_final, tsdata=pre_mhw_data, 
+                 family=family,
+                 estimate_delta0=TRUE,
+                 control=dsem_control(parameters = pars_final_pre,
+                                      map = map_final_pre,
+                                      quiet = TRUE,
+                                      getsd = TRUE))
+
+summary(fit_dsem_pre_mhw)
+#Interesting! So our snow-tanner causal relationship holds even without the MHW-
+  #Evidence for consistent, negative effect of snow crab on tanner crab with 3 yr lag 
+  #Mortality mechanism for snow crab is dependent on the MHW (though positive effect remains)
 
 
 

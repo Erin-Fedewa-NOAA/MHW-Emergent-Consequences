@@ -1,0 +1,8 @@
+"","lag","name","start","parameter","first","second","direction","Estimate","Std_Error","z_value","p_value","Causal_Pathway"
+"4...1","Lag 1","icetotanner",NA,4,"sea_ice","log_tanner_abundance","1",0.0171403804052953,0.11370757162607,0.150740888756835,0.880180117190048,"Sea Ice to Tanner"
+"4...2","Lag 2","icetotanner",NA,4,"sea_ice","log_tanner_abundance","1",0.00413854840506356,0.118251383518796,0.0349978857068149,0.972081426803487,"Sea Ice to Tanner"
+"5...3","Lag 1","icetosnow",NA,5,"sea_ice","log_snow_abundance","1",0.278540454072887,0.151600517818019,1.83733181180322,0.0661609263928884,"Sea Ice to Snow"
+"5...4","Lag 2","icetosnow",NA,5,"sea_ice","log_snow_abundance","1",0.282663737005748,0.15405208694823,1.83485821325314,0.0665267005466128,"Sea Ice to Snow"
+"6...5","Lag 1","snowtotanner",NA,6,"log_snow_abundance","log_tanner_abundance","1",-0.236784681283856,0.110933401474327,-2.13447598412147,0.0328038374977092,"Snow to Tanner"
+"6...6","Lag 2","snowtotanner",NA,6,"log_snow_abundance","log_tanner_abundance","1",-0.35436763964355,0.0869829264633533,-4.0739907709687,4.62143136361755e-05,"Snow to Tanner"
+"6...7","Lag 3","snowtotanner",NA,6,"log_snow_abundance","log_tanner_abundance","1",-0.44362912518687,0.0847258691086228,-5.23605281189993,1.6404703069773e-07,"Snow to Tanner"
