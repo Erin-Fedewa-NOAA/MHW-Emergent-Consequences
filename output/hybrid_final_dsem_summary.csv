@@ -1,0 +1,14 @@
+"path","lag","name","start","parameter","first","second","direction","Estimate","Std_Error","z_value","p_value"
+"sea_ice -> sea_ice",1,"ar_seaice",NA,1,"sea_ice","sea_ice","1",0.455169367830615,0.151985001605935,2.99483082554931,0.00274597095735504
+"log_snow_abundance -> log_snow_abundance",1,"ar_snow",NA,2,"log_snow_abundance","log_snow_abundance","1",0.640244258702157,0.118531924137593,5.40144997527379,6.61043745997086e-08
+"log_hybrid_abundance -> log_hybrid_abundance",1,"ar_hybrid",NA,3,"log_hybrid_abundance","log_hybrid_abundance","1",0.853840050575743,0.0911085601439108,9.37167758141559,7.13887017334385e-21
+"bhatta_snowfem_tanmale -> bhatta_snowfem_tanmale",1,"ar_overlap",NA,4,"bhatta_snowfem_tanmale","bhatta_snowfem_tanmale","1",0.587372574037555,0.187899667047702,3.12599049943202,0.0017720727658576
+"sea_ice -> log_hybrid_abundance",1,"icetohybrid",NA,5,"sea_ice","log_hybrid_abundance","1",0.0469198201477855,0.0866582893467346,0.541434876011126,0.588207873879802
+"sea_ice -> log_snow_abundance",1,"icetosnow",NA,6,"sea_ice","log_snow_abundance","1",0.293061862992353,0.122177297023671,2.3986605542237,0.0164551608807226
+"sea_ice -> bhatta_snowfem_tanmale",0,"icetooverlap",NA,7,"sea_ice","bhatta_snowfem_tanmale","1",0.135169904273043,0.150616319797651,0.897445273225639,0.369481363610739
+"log_snow_abundance -> log_hybrid_abundance",3,"snowtohybrid",NA,8,"log_snow_abundance","log_hybrid_abundance","1",-0.311710523160963,0.0949202501251251,-3.28392016192606,0.00102373919091956
+"bhatta_snowfem_tanmale -> log_hybrid_abundance",5,"overlaptohybrid",NA,9,"bhatta_snowfem_tanmale","log_hybrid_abundance","1",-0.0617698558638463,0.109642537464659,-0.563374920830856,0.573179610963193
+"sea_ice <-> sea_ice",0,"V[sea_ice]",NA,10,"sea_ice","sea_ice","2",0.889858315456834,0.104886397644243,8.48402019178008,2.17543985084062e-17
+"bhatta_snowfem_tanmale <-> bhatta_snowfem_tanmale",0,"V[bhatta_snowfem_tanmale]",NA,11,"bhatta_snowfem_tanmale","bhatta_snowfem_tanmale","2",0.857148015946227,0.102872568022669,8.33213394417596,7.93980450164479e-17
+"log_hybrid_abundance <-> log_hybrid_abundance",0,"V[log_hybrid_abundance]",NA,12,"log_hybrid_abundance","log_hybrid_abundance","2",0.455111614502908,0.0593618042404667,7.66674160811069,1.76420679661267e-14
+"log_snow_abundance <-> log_snow_abundance",0,"V[log_snow_abundance]",NA,13,"log_snow_abundance","log_snow_abundance","2",0.69675467197158,0.0837614457720179,8.31832193856836,8.92174055797085e-17

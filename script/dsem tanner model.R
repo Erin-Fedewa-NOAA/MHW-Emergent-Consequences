@@ -808,18 +808,37 @@ summary(fit_dsem$sdrep, "fixed")[, "Std. Error"] #shouldn't be any NA/NaN
 
 res <- residuals(fit_dsem)
 
+res_df <- as.data.frame(res) %>%
+  mutate(time = 1:n()) %>%
+  pivot_longer(-time, names_to = "variable", values_to = "residual")
+
 #autocorrelation of residuals
-acf(na.omit(res[, 1]))
-acf(na.omit(res[, 2]))
-acf(na.omit(res[, 3]))
+acf_df <- res_df %>%
+  group_by(variable) %>%
+  summarise(acf = list(acf(na.omit(residual), plot = FALSE))) %>%
+  mutate(lag = map(acf, ~ .x$lag),
+         acf_val = map(acf, ~ .x$acf)) %>%
+  unnest(c(lag, acf_val))
+
+ggplot(acf_df, aes(x = lag, y = acf_val)) +
+  geom_hline(yintercept = 0) +
+  geom_segment(aes(xend = lag, yend = 0)) +
+  facet_wrap(~ variable, scales = "free_y") +
+  labs(x = "Lag",
+       y = "ACF",
+       title = "Autocorrelation of Residuals") +
+  theme_minimal()
 
 #normality of residuals
-par(mfrow = c(1,3))
-
-for(i in 1:ncol(res)) {
-  qqnorm(res[, i], main = colnames(res)[i])
-  qqline(res[, i], col = "red")}
-#approximately normal, but some deviations in tails 
+ggplot(res_df, aes(sample = residual)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  facet_wrap(~ variable, scales = "free") +
+  labs(title = "QQ Plots of Residuals",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles") +
+  theme_minimal()
+#approximately normal, but some deviations in tails
 
 #Latent State Diagnostics:
 
@@ -1088,6 +1107,8 @@ ggplot(sensitivity_results, aes(x = obs_sd, y = Estimate, color = name)) +
 #Here, we'll simulate data from final Tanner dsem model, refit the model to
   #each simulated dataset, and compare parameter estimates to true values to check
   #whether the fitted model can recover its own parameters when new data is simulated
+
+#function modified from J. Bigman ATF ESP 
 
 simTestDSEM <- function(fitDSEM, sem, n_sim, start, family) {
     
