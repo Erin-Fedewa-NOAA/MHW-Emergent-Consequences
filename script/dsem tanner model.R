@@ -46,16 +46,10 @@ crab_abund <- read.csv("./output/crab_abundance.csv")
 #-----------------------------------------#
 # Define covariates and standardize ---- 
 #-----------------------------------------#
-start_year = 1988
 
-#Note: because we're testing a max lag of 6 years, this workflow was originally tested 
-  #with a longer sea ice timeseries (1982+). We report sensitivities to this model,
-  #specification, noting that the shorter sea ice timeseries was selected in order to 
-  #optimize latent state estimation of crab abundance timeseries 
-
+#data wrangling
 dat_tanner <- sea_ice %>%
   select(year, Mar_Apr_ice_EBS_NBS) %>%
-  filter(year >= start_year) %>% 
   rename(sea_ice = Mar_Apr_ice_EBS_NBS) %>%
   full_join(crab_abund %>%
               filter(category == "population_50mm_plus" & species != "hybrid") %>%
@@ -773,20 +767,20 @@ snowtotanner <- paths_of_interest %>%
   filter((first == "log_snow_abundance" & second == "log_tanner_abundance")) %>%
   pull(Estimate)
 
-indirect = icetosnow * snowtotanner #-0.11
+indirect = icetosnow * snowtotanner #-0.10
 
 #Direct effect of sea ice
 icetotanner <- paths_of_interest %>%
   filter((first == "sea_ice" & second == "log_tanner_abundance")) %>%
   pull(Estimate)
-direct = icetotanner #0.04
+direct = icetotanner #0.03
 
 #total effect of sea ice
 total = indirect + icetotanner #-0.07
 
 #relative importance of direct vrs indirect effect
 prop_indirect = abs(indirect) / (abs(indirect) + abs(direct))
-#overall, sea ice has a negative effect on tanner crab, and ~73% of the total 
+#overall, sea ice has a negative effect on tanner crab, and ~79% of the total 
   #effect is driven by the indirect pathway
 
 #-------------------------------------------#
@@ -872,19 +866,6 @@ ggplot(df_plot, aes(x = time)) +
 #this is probably expected since we fixed SD?
   #ie model is estimating trend vrs latent process noise 
 
-#residual vrs fitted: tanner abundance
-res_tanner <- obs_tanner - states_mat[, "log_tanner_abundance"]
-
-df_res <- data.frame(
-  fitted = states_mat[, "log_tanner_abundance"],
-  res = res_tanner)
-
-ggplot(df_res, aes(x = fitted, y = res)) +
-  geom_point(alpha = 0.6) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  theme_bw()
-#looks good 
-
 #Would be worth following up on these, there are very few published diagnostics
   #in the dsem package currently 
 
@@ -952,7 +933,7 @@ plot_fit <- function(Y, fit, start_year = NULL){
 }
 
 #plot
-plot_fit(data, fit_dsem, start_year = start_year)
+plot_fit(data, fit_dsem, start_year = 1980)
 
 #and now plot fitted DAG
 plot(as_fitted_DAG(fit_dsem, what = "path_coefficient"))
@@ -1035,8 +1016,8 @@ var_df %>%
 #extract at final time step
 var_df %>%
   filter(time == max(time))
-#at time step 10, AR explains 30%, snow abundance explains 54% and sea ice
-  #explains 16% of tanner crab abundance
+#at time step 10, AR explains 34%, snow abundance explains 54% and sea ice
+  #explains 12% of tanner crab abundance
 
 #note that for DSEM we don't have a single global Rsq like a regression model because
   #goodness of fit is multi-dimensional 
@@ -1067,7 +1048,6 @@ for (i in seq_along(obs_sd_values)) {
     sem = sem_final,
     tsdata = data,
     family = family,
-    estimate_delta0 = TRUE,
     control = dsem_control(
       parameters = pars_tmp,
       map = map_tmp,
@@ -1104,9 +1084,9 @@ ggplot(sensitivity_results, aes(x = obs_sd, y = Estimate, color = name)) +
 # Monte Carlo Simulation-based validation ----
 #-------------------------------------------------#
 
-#Here, we'll simulate data from final Tanner dsem model, refit the model to
-  #each simulated dataset, and compare parameter estimates to true values to check
-  #whether the fitted model can recover its own parameters when new data is simulated
+#Here, we'll conduct a parametric bootstrap to simulate data from final Tanner dsem model, 
+  #refit the model to each simulated dataset, and compare parameter estimates to true values to 
+  #check whether the fitted model can recover its own parameters when new data is simulated
 
 #function modified from J. Bigman ATF ESP 
 
@@ -1325,7 +1305,6 @@ effects %>%
 #filter dataset
 pre_mhw <- sea_ice %>%
   select(year, Mar_Apr_ice_EBS_NBS) %>%
-  filter(year >= start_year) %>% 
   rename(sea_ice = Mar_Apr_ice_EBS_NBS) %>%
   full_join(crab_abund %>%
               filter(category == "population_50mm_plus" & species != "hybrid") %>%

@@ -50,11 +50,10 @@ overlap <- read.csv("./output/overlap_output.csv")
 #-----------------------------------------#
 # Define covariates and standardize ---- 
 #-----------------------------------------#
-start_year = 1988
 
+#wrangle data
 dat_hybrid <- sea_ice %>%
   select(year, Mar_Apr_ice_EBS_NBS) %>%
-  filter(year >= start_year) %>% 
   rename(sea_ice = Mar_Apr_ice_EBS_NBS) %>%
   full_join(overlap %>%
               select(-bhatta_global)) %>%
@@ -240,6 +239,9 @@ localTests(lagged_dag, lagged_dat2)
 #Lag testing: sea ice -> hybrid causal pathway ----
 #----------------------------------------------------#
 
+#Note that because the hybrid models have more causal pathways to estimate compared
+  #to the tanner models, we won't estimate delta0 and will fix observation error at 0.1
+
 #Define SEMs for each sea ice -> hybrid lag
 sem_lag1_hybrid <- "
   # AR terms
@@ -253,7 +255,7 @@ sem_lag1_hybrid <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 1, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 sem_lag2_hybrid <- "
@@ -267,7 +269,7 @@ sem_lag2_hybrid <- "
   sea_ice -> log_hybrid_abundance, 2, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 1, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 # ----------------------------#
@@ -278,7 +280,7 @@ fit_build1_hybrid <- dsem(
   sem = sem_lag1_hybrid,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 #Extract parameters & map from full model
@@ -287,7 +289,6 @@ map1_hybrid  <- fit_build1_hybrid$tmb_inputs$map
 
 #Set reasonable starting values
 n_vars <- ncol(data) #used to index parameters
-pars1_hybrid$delta0_j <- rep(0.01, n_vars) #small positive numbers improve numerical stability during optimization
 pars1_hybrid$lnsigma_j <- rep(log(0.1), n_vars) #small observation error to improve stability
 map1_hybrid$lnsigma_j <- factor(rep(NA, n_vars)) #tells TMB to fix observation error
 n_beta1_hybrid <- length(pars1_hybrid$beta_z) #total # of coefficients in the SEM (beta_z)
@@ -297,7 +298,7 @@ fit_lag1_hybrid <- dsem(
   sem = sem_lag1_hybrid,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars1_hybrid,
     map = map1_hybrid,
@@ -311,14 +312,13 @@ fit_build2_hybrid <- dsem(
   sem = sem_lag2_hybrid,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars2_hybrid <- fit_build2_hybrid$tmb_inputs$parameters
 map2_hybrid  <- fit_build2_hybrid$tmb_inputs$map
 
 #set starting parameters
-pars2_hybrid$delta0_j <- rep(0.01, n_vars)
 pars2_hybrid$lnsigma_j <- rep(log(0.1), n_vars)
 map2_hybrid$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta2_hybrid <- length(pars2_hybrid$beta_z)
@@ -328,7 +328,7 @@ fit_lag2_hybrid <- dsem(
   sem = sem_lag2_hybrid,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars2_hybrid,
     map = map2_hybrid,
@@ -376,7 +376,7 @@ ggplot(est_all_icetohybrid, aes(x = lag, y = Estimate, fill = lag)) +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
-#Very small effect size and AIC can't distinguish between lag structures- we'll stick
+#Very small insignificant effect size and AIC can't distinguish between lag structures- we'll stick
   #with lag 1 for parsimony/consistency with snow crab lag
 
 #------------------------------------------------#
@@ -395,7 +395,7 @@ sem_lag1_snow <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 1, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 sem_lag2_snow <- "
@@ -409,7 +409,7 @@ sem_lag2_snow <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 2, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 1, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 #-----------------------------#
@@ -419,7 +419,7 @@ fit_build1_snow <- dsem(
   sem = sem_lag1_snow,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars1_snow <- fit_build1_snow$tmb_inputs$parameters
@@ -427,7 +427,6 @@ map1_snow  <- fit_build1_snow$tmb_inputs$map
 
 # Safe starting values
 n_vars <- ncol(data)
-pars1_snow$delta0_j <- rep(0.01, n_vars) #delta0
 pars1_snow$lnsigma_j <- rep(log(0.1), n_vars) #observation error
 map1_snow$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta1_snow <- length(pars1_snow$beta_z)
@@ -437,7 +436,7 @@ fit_lag1_snow <- dsem(
   sem = sem_lag1_snow,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars1_snow,
     map = map1_snow,
@@ -451,13 +450,12 @@ fit_build2_snow <- dsem(
   sem = sem_lag2_snow,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars2_snow <- fit_build2_snow$tmb_inputs$parameters
 map2_snow  <- fit_build2_snow$tmb_inputs$map
 
-pars2_snow$delta0_j <- rep(0.01, n_vars)
 pars2_snow$lnsigma_j <- rep(log(0.1), n_vars)
 map2_snow$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta2_snow <- length(pars2_snow$beta_z)
@@ -467,7 +465,7 @@ fit_lag2_snow <- dsem(
   sem = sem_lag2_snow,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars2_snow,
     map = map2_snow,
@@ -571,7 +569,7 @@ fit_build1_sth <- dsem(
   sem = sem_lag1_sth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars1_sth <- fit_build1_sth$tmb_inputs$parameters
@@ -579,7 +577,6 @@ map1_sth  <- fit_build1_sth$tmb_inputs$map
 
 # Safe starting values
 n_vars <- ncol(data)
-pars1_sth$delta0_j <- rep(0, n_vars) #delta0
 pars1_sth$lnsigma_j <- rep(log(0.1), n_vars) 
 map1_sth$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta1_sth <- length(pars1_sth$beta_z)
@@ -589,7 +586,7 @@ fit_lag1_sth <- dsem(
   sem = sem_lag1_sth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars1_sth,
     map = map1_sth,
@@ -603,13 +600,12 @@ fit_build2_sth <- dsem(
   sem = sem_lag2_sth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars2_sth <- fit_build2_sth$tmb_inputs$parameters
 map2_sth  <- fit_build2_sth$tmb_inputs$map
 
-pars2_sth$delta0_j <- rep(0, n_vars)
 pars2_sth$lnsigma_j <- rep(log(0.1), n_vars)
 map2_sth$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta2 <- length(pars2_sth$beta_z)
@@ -619,7 +615,7 @@ fit_lag2_sth <- dsem(
   sem = sem_lag2_sth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars2_sth,
     map = map2_sth,
@@ -633,13 +629,12 @@ fit_build3_sth <- dsem(
   sem = sem_lag3_sth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars3_sth <- fit_build3_sth$tmb_inputs$parameters
 map3_sth  <- fit_build3_sth$tmb_inputs$map
 
-pars3_sth$delta0_j <- rep(0, n_vars)
 pars3_sth$lnsigma_j <- rep(log(0.1), n_vars)
 map3_sth$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta3 <- length(pars3_sth$beta_z)
@@ -649,7 +644,7 @@ fit_lag3_sth <- dsem(
   sem = sem_lag3_sth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars3_sth,
     map = map3_sth,
@@ -703,8 +698,7 @@ ggplot(est_all_snowtohybrid, aes(x = lag, y = Estimate, fill = lag)) +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
-#Lag 2/3 models identical via AIC. Again, results are robust to either lag- we'll
-  #chose lag 3 to stay consistent with Tanner crab model lag structure
+#Best support for lag 2
 
 #----------------------------------------------------------------#
 #Lag testing: spatial overlap -> hybrid causal pathway ----
@@ -722,7 +716,7 @@ sem_lag5_oth <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 3, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 sem_lag6_oth <- "
@@ -736,7 +730,7 @@ sem_lag6_oth <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 3, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
  bhatta_snowfem_tanmale -> log_hybrid_abundance, 6, overlaptohybrid"
 
 # -----------------------------#
@@ -746,7 +740,7 @@ fit_build5_oth <- dsem(
   sem = sem_lag5_oth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars5_oth <- fit_build5_oth$tmb_inputs$parameters
@@ -754,7 +748,6 @@ map5_oth  <- fit_build5_oth$tmb_inputs$map
 
 # Safe starting values
 n_vars <- ncol(data)
-pars5_oth$delta0_j <- rep(0, n_vars) #delta0
 pars5_oth$lnsigma_j <- rep(log(0.1), n_vars) 
 map5_oth$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta5_oth <- length(pars5_oth$beta_z)
@@ -764,7 +757,7 @@ fit_lag5_oth <- dsem(
   sem = sem_lag5_oth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars5_oth,
     map = map5_oth,
@@ -778,13 +771,12 @@ fit_build6_oth <- dsem(
   sem = sem_lag6_oth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars6_oth <- fit_build6_oth$tmb_inputs$parameters
 map6_oth  <- fit_build6_oth$tmb_inputs$map
 
-pars6_oth$delta0_j <- rep(0, n_vars)
 pars6_oth$lnsigma_j <- rep(log(0.1), n_vars)
 map6_oth$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta6 <- length(pars6_oth$beta_z)
@@ -794,7 +786,7 @@ fit_lag6_oth <- dsem(
   sem = sem_lag6_oth,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars6_oth,
     map = map6_oth,
@@ -842,8 +834,8 @@ ggplot(est_all_overlaptohybrid, aes(x = lag, y = Estimate, fill = lag)) +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
-#AIC scores nearly identical, effect sizes are small and insignificant. We'll 
-  #stick with lag 5 for parsimony
+#AIC scores are similar, effect sizes are small and insignificant. We'll 
+  #go with lowest AIC/largest effect size and use lag 6 
 
 #----------------------------------------------------#
 #Lag testing: sea ice -> overlap causal pathway ----
@@ -861,7 +853,7 @@ sem_lag0_ito <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 3, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 sem_lag1_ito <- "
@@ -875,7 +867,7 @@ sem_lag1_ito <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 1, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 3, snowtohybrid
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
   bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
 
 # ----------------------------#
@@ -886,7 +878,7 @@ fit_build0_ito <- dsem(
   sem = sem_lag0_ito,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 #Extract parameters & map from full model
@@ -895,7 +887,6 @@ map0_ito  <- fit_build0_ito$tmb_inputs$map
 
 #Set reasonable starting values
 n_vars <- ncol(data) #used to index parameters
-pars0_ito$delta0_j <- rep(0.01, n_vars) #small positive numbers improve numerical stability during optimization
 pars0_ito$lnsigma_j <- rep(log(0.1), n_vars) #small observation error to improve stability
 map0_ito$lnsigma_j <- factor(rep(NA, n_vars)) #tells TMB to fix observation error
 n_beta0_ito <- length(pars0_ito$beta_z) #total # of coefficients in the SEM (beta_z)
@@ -905,7 +896,7 @@ fit_lag0_ito <- dsem(
   sem = sem_lag0_ito,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars0_ito,
     map = map0_ito,
@@ -919,14 +910,13 @@ fit_build1_ito <- dsem(
   sem = sem_lag1_ito,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(run_model = FALSE))
 
 pars1_ito <- fit_build1_ito$tmb_inputs$parameters
 map1_ito  <- fit_build1_ito$tmb_inputs$map
 
 #set starting parameters
-pars1_ito$delta0_j <- rep(0.01, n_vars)
 pars1_ito$lnsigma_j <- rep(log(0.1), n_vars)
 map1_ito$lnsigma_j <- factor(rep(NA, n_vars))
 n_beta1_ito <- length(pars1_ito$beta_z)
@@ -936,7 +926,7 @@ fit_lag1_ito <- dsem(
   sem = sem_lag1_ito,
   tsdata = data,
   family = family,
-  estimate_delta0 = TRUE,
+  estimate_delta0 = FALSE,
   control = dsem_control(
     parameters = pars1_ito,
     map = map1_ito,
@@ -1073,29 +1063,16 @@ sem_final <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_snowfem_tanmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 3, snowtohybrid
-  bhatta_snowfem_tanmale -> log_hybrid_abundance, 5, overlaptohybrid"
-
-#two-stage modeling fitting procedure: 
-##initial first model run without delta0 (to improve starting values)
-fit0 <- dsem(sem = sem_final, tsdata = data,
-             family = family, estimate_delta0 = FALSE,
-             control = dsem_control(quiet = FALSE, getsd = FALSE))
-
-# extract starting parameters
-parameters <- fit0$obj$env$parList()
-
-# add starting values for delta0
-parameters$delta0_j <- rep(0, ncol(data))
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
+  bhatta_snowfem_tanmale -> log_hybrid_abundance, 6, overlaptohybrid"
 
 #build model without running it
 #(needed so we can modify TMB inputs)
 fit_build_final <- dsem(sem = sem_final, tsdata = data,
                         family = family,
-                        estimate_delta0 = TRUE,
+                        estimate_delta0 = FALSE,
                         control = dsem_control(
-                          run_model = FALSE,
-                          parameters = parameters))
+                          run_model = FALSE))
 
 pars_final <- fit_build_final$tmb_inputs$parameters
 map_final  <- fit_build_final$tmb_inputs$map
@@ -1112,7 +1089,7 @@ map_final$lnsigma_j <- factor(rep(NA, ncol(data)))
 
 fit_dsem <- dsem(sem=sem_final, tsdata=data, 
                  family=family,
-                 estimate_delta0=TRUE,
+                 estimate_delta0=FALSE,
                  control=dsem_control(parameters = pars_final,
                                       map = map_final,
                                       quiet = TRUE,
@@ -1141,27 +1118,15 @@ sem_final_2 <- "
   sea_ice -> log_hybrid_abundance, 1, icetohybrid
   sea_ice -> log_snow_abundance, 1, icetosnow
   sea_ice -> bhatta_tannerfem_snowmale, 0, icetooverlap
-  log_snow_abundance -> log_hybrid_abundance, 3, snowtohybrid
-  bhatta_tannerfem_snowmale -> log_hybrid_abundance, 5, overlaptohybrid"
-
-##initial first model run without delta0 (to improve starting values)
-fit0b <- dsem(sem = sem_final_2, tsdata = data2,
-             family = family, estimate_delta0 = FALSE,
-             control = dsem_control(quiet = FALSE, getsd = FALSE))
-
-# extract starting parameters
-parameters_b <- fit0b$obj$env$parList()
-
-# add starting values for delta0
-parameters_b$delta0_j <- rep(0, ncol(data2))
+  log_snow_abundance -> log_hybrid_abundance, 2, snowtohybrid
+  bhatta_tannerfem_snowmale -> log_hybrid_abundance, 6, overlaptohybrid"
 
 #build model without running it
 fit_build_final2 <- dsem(sem = sem_final_2, tsdata = data2,
                         family = family,
-                        estimate_delta0 = TRUE,
+                        estimate_delta0 = FALSE,
                         control = dsem_control(
-                          run_model = FALSE,
-                          parameters = parameters_b))
+                          run_model = FALSE))
 
 pars_final_b <- fit_build_final2$tmb_inputs$parameters
 map_final_b  <- fit_build_final2$tmb_inputs$map
@@ -1175,11 +1140,12 @@ map_final_b$lnsigma_j <- factor(rep(NA, ncol(data2)))
 #run final model fit with Delta0 and fixed SD
 fit_dsem2 <- dsem(sem=sem_final_2, tsdata=data2, 
                  family=family,
-                 estimate_delta0=TRUE,
+                 estimate_delta0=FALSE,
                  control=dsem_control(parameters = pars_final_b,
                                       map = map_final_b,
                                       quiet = TRUE,
-                                      getsd = TRUE))
+                                      getsd = TRUE,
+                                      newton_loops = 3))
 
 summary(fit_dsem2)
 
@@ -1222,17 +1188,17 @@ indirect_snow = icetosnow * snowtohybrid
 indirect_overlap = icetooverlap * overlaptohybrid
 
 #indirect effect = sum of indirect pathways
-indirect = indirect_snow + indirect_overlap # -0.10
+indirect = indirect_snow + indirect_overlap # -0.09
 
 #Direct effect of sea ice
 icetohybrid <- paths_of_interest %>%
   filter((first == "sea_ice" & second == "log_hybrid_abundance")) %>%
   pull(Estimate)
 
-direct = icetohybrid # 0.05
+direct = icetohybrid # -0.01
 
 #total effect of sea ice
-total = indirect + direct # -0.05
+total = indirect + direct # -0.10
 
 #relative importance of direct vrs indirect effect
 
@@ -1242,7 +1208,7 @@ most_important = max(abs(indirect_snow), abs(indirect_overlap)) #indirect snow, 
 prop_indirect = most_important / 
   (abs(direct) + abs(indirect_snow) + abs(indirect_overlap))
 #overall, sea ice has a negative effect on hybrids, and the dominant indirect effect, 
-  #ice->snow crab-> hybrids, accounts for ~62% of the total 
+  #ice->snow crab-> hybrids, accounts for ~76% of the total 
   #effect of sea ice on hybrid abundance
 
 #-------------------------------------------#
@@ -1407,7 +1373,7 @@ plot_fit <- function(Y, fit, start_year = NULL){
 }
 
 #plot
-plot_fit(data, fit_dsem, start_year = start_year)
+plot_fit(data, fit_dsem, start_year = 1980)
 
 #and now plot fitted DAG
 plot(as_fitted_DAG(fit_dsem, what = "path_coefficient"))
@@ -1426,7 +1392,7 @@ plot(as_fitted_DAG(fit_dsem_auto, what = c("Estimate", "Std_Error", "p_value")),
 # Calculate cumulative lagged effects
 #ie if variable X changes at time t, what is the cumulative effect of variable Y 
 #after lag k, accounting for direct + indirect pathways
-effect = total_effect(fit_dsem, n_lags = 6) 
+effect = total_effect(fit_dsem, n_lags = 7) 
 
 # Plot total effect
 ggplot( effect) + 
@@ -1490,8 +1456,8 @@ var_df %>%
 #extract at final time step
 var_df %>%
   filter(time == max(time))
-#at time step 10, AR explains 42%, snow abundance explains 43% and sea ice
-#explains 12% of hybrid crab abundance
+#at time step 10, AR explains 36%, snow abundance explains 49% and sea ice
+#explains 13% of hybrid crab abundance
 
 #note that for DSEM we don't have a single global Rsq like a regression model because
 #goodness of fit is multi-dimensional 
@@ -1522,7 +1488,7 @@ for (i in seq_along(obs_sd_values)) {
     sem = sem_final,
     tsdata = data,
     family = family,
-    estimate_delta0 = TRUE,
+    estimate_delta0 = FALSE,
     control = dsem_control(
       parameters = pars_tmp,
       map = map_tmp,
@@ -1740,102 +1706,6 @@ ggplot() +
              aes(fitted, resid), color = "red", alpha = 0.6) +
   theme_minimal() +
   labs(title = "Residual vs Fitted: Simulated (grey) vs Original (red)")
-
-#-------------------------------------------#
-# Hindcasting validation ----
-#-------------------------------------------#
-
-#If we remove the MHW event (i.e. use 1988-2017 only), are inferred relationships
-#still observed? i.e. are pathways persistent, or driven by MHW
-
-#filter dataset
-pre_mhw <- sea_ice %>%
-  select(year, Mar_Apr_ice_EBS_NBS) %>%
-  filter(year >= start_year) %>% 
-  rename(sea_ice = Mar_Apr_ice_EBS_NBS) %>%
-  full_join(overlap %>%
-              select(-bhatta_global)) %>%
-  full_join(crab_abund %>%
-              filter(category == "population_50mm_plus" & species != "tanner") %>%
-              select(year, abundance, species) %>%
-              pivot_wider(names_from = "species", values_from = "abundance") %>%
-              rename(snow_abundance=snow, hybrid_abundance=hybrid)) %>%
-  filter(year <= 2017)
-
-#Scale all variables for dsem
-vars <- c("sea_ice",
-          "snow_abundance", "log_snow_abundance",
-          "hybrid_abundance", "log_hybrid_abundance")
-
-pre_mhw_data <- pre_mhw %>%
-  mutate(log_hybrid_abundance = log(hybrid_abundance),
-         log_snow_abundance = log(snow_abundance)) %>%
-  mutate(across(all_of(c(vars)), ~ as.numeric(scale(.)))) %>%
-  select(-hybrid_abundance, -snow_abundance)
-
-#prep data for dsem model
-pre_mhw_data <- pre_mhw_data %>%
-  select(-year, -bhatta_tannerfem_snowmale) %>%
-  ts()
-
-#run model using same specifications/lags from above 
-
-#two-stage modeling fitting procedure: 
-##initial first model run without delta0 (to improve starting values)
-fit0_pre <- dsem(sem = sem_final, tsdata = pre_mhw_data,
-                 family = family, estimate_delta0 = FALSE,
-                 control = dsem_control(quiet = FALSE, getsd = FALSE))
-
-# extract starting parameters
-parameters_pre <- fit0_pre$obj$env$parList()
-
-# add starting values for delta0
-parameters_pre$delta0_j <- rep(0, ncol(pre_mhw_data))
-
-#build model without running it
-#(needed so we can modify TMB inputs)
-fit_build_final_pre <- dsem(sem = sem_final, tsdata = pre_mhw_data,
-                            family = family,
-                            estimate_delta0 = TRUE,
-                            control = dsem_control(
-                              run_model = FALSE,
-                              parameters = parameters_pre))
-
-pars_final_pre <- fit_build_final_pre$tmb_inputs$parameters
-map_final_pre  <- fit_build_final_pre$tmb_inputs$map
-
-# fix observation SD = 0.1
-pars_final_pre$lnsigma_j <- rep(log(0.1), ncol(pre_mhw_data))
-
-# prevent estimation of observation SD
-map_final_pre$lnsigma_j <- factor(rep(NA, ncol(pre_mhw_data)))
-
-#run final model fit with Delta0 and fixed observation error
-fit_dsem_pre_mhw <- dsem(sem=sem_final, tsdata=pre_mhw_data, 
-                         family=family,
-                         estimate_delta0=TRUE,
-                         control=dsem_control(parameters = pars_final_pre,
-                                              map = map_final_pre,
-                                              quiet = TRUE,
-                                              getsd = TRUE))
-
-summary(fit_dsem_pre_mhw)
-#This model is unstable- probably due to fewer data points relative to the number
-  #of causal pathways and lags being estimated 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

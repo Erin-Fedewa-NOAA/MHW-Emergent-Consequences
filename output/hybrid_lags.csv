@@ -1,12 +1,12 @@
-,lag,name,start,parameter,first,second,direction,Estimate,Std_Error,z_value,p_value,Causal_Pathway
-5...1,Lag 1,icetohybrid,NA,5,sea_ice,log_hybrid_abundance,1,-0.023352512,0.092182901,-0.253328026,0.80001474,Sea Ice to Hybrid
-5...2,Lag 2,icetohybrid,NA,5,sea_ice,log_hybrid_abundance,1,0.025005673,0.093523934,0.267371914,0.789182822,Sea Ice to Hybrid
-6...3,Lag 1,icetosnow,NA,6,sea_ice,log_snow_abundance,1,0.278193432,0.12312684,2.259405284,0.023858186,Sea Ice to Snow
-6...4,Lag 2,icetosnow,NA,6,sea_ice,log_snow_abundance,1,0.187833757,0.127520931,1.472964128,0.140760709,Sea Ice to Snow
-8...5,Lag 1,snowtohybrid,NA,8,log_snow_abundance,log_hybrid_abundance,1,-0.131932825,0.093463418,-1.411598551,0.158068199,Snow to Hybrid
-8...6,Lag 2,snowtohybrid,NA,8,log_snow_abundance,log_hybrid_abundance,1,-0.306933481,0.093609494,-3.278871283,0.001042232,Snow to Hybrid
-8...7,Lag 3,snowtohybrid,NA,8,log_snow_abundance,log_hybrid_abundance,1,-0.311710523,0.09492025,-3.283920162,0.001023739,Snow to Hybrid
-9...8,Lag 5,overlaptohybrid,NA,9,bhatta_snowfem_tanmale,log_hybrid_abundance,1,-0.061769856,0.109642537,-0.563374921,0.573179611,Overlap to Hybrid
-9...9,Lag 6,overlaptohybrid,NA,9,bhatta_snowfem_tanmale,log_hybrid_abundance,1,0.041287778,0.133407682,0.30948576,0.756952043,Overlap to Hybrid
-7...10,Lag 0,icetooverlap,NA,7,sea_ice,bhatta_snowfem_tanmale,1,0.135169904,0.15061632,0.897445273,0.369481364,Sea Ice to Overlap
-7...11,Lag 1,icetooverlap,NA,7,sea_ice,bhatta_snowfem_tanmale,1,0.121061293,0.165962995,0.729447507,0.465727966,Sea Ice to Overlap
+"","lag","name","start","parameter","first","second","direction","Estimate","Std_Error","z_value","p_value","Causal_Pathway"
+"5...1","Lag 1","icetohybrid",NA,5,"sea_ice","log_hybrid_abundance","1",0.0087561393212881,0.0727063806905212,0.120431511486717,0.904141330497306,"Sea Ice to Hybrid"
+"5...2","Lag 2","icetohybrid",NA,5,"sea_ice","log_hybrid_abundance","1",0.0022862013221087,0.0690314726030693,0.0331182464446955,0.973580292172115,"Sea Ice to Hybrid"
+"6...3","Lag 1","icetosnow",NA,6,"sea_ice","log_snow_abundance","1",0.245715804070697,0.115071833041171,2.13532536657153,0.0327344422864155,"Sea Ice to Snow"
+"6...4","Lag 2","icetosnow",NA,6,"sea_ice","log_snow_abundance","1",0.175618953483414,0.118127678880273,1.48668758370687,0.137097343516077,"Sea Ice to Snow"
+"8...5","Lag 1","snowtohybrid",NA,8,"log_snow_abundance","log_hybrid_abundance","1",-0.134125135322386,0.0937374031992994,-1.43086036890969,0.152470237238938,"Snow to Hybrid"
+"8...6","Lag 2","snowtohybrid",NA,8,"log_snow_abundance","log_hybrid_abundance","1",-0.335082117045731,0.088907599484705,-3.76888048926994,0.000163981373269292,"Snow to Hybrid"
+"8...7","Lag 3","snowtohybrid",NA,8,"log_snow_abundance","log_hybrid_abundance","1",-0.299722661320358,0.089155933922543,-3.36178028913647,0.000774417160052064,"Snow to Hybrid"
+"9...8","Lag 5","overlaptohybrid",NA,9,"bhatta_snowfem_tanmale","log_hybrid_abundance","1",-0.0108021229949969,0.127146058293743,-0.0849583788908418,0.932294479859158,"Overlap to Hybrid"
+"9...9","Lag 6","overlaptohybrid",NA,9,"bhatta_snowfem_tanmale","log_hybrid_abundance","1",-0.090879300144497,0.120926966445562,-0.751522202332002,0.452338444029572,"Overlap to Hybrid"
+"7...10","Lag 0","icetooverlap",NA,7,"sea_ice","bhatta_snowfem_tanmale","1",0.13051882188755,0.13807973514173,0.945242411955531,0.344535131374954,"Ice to Overlap"
+"7...11","Lag 1","icetooverlap",NA,7,"sea_ice","bhatta_snowfem_tanmale","1",0.11308969524489,0.152369638488664,0.742206231941042,0.457962393346928,"Ice to Overlap"
