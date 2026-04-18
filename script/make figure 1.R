@@ -204,7 +204,7 @@ ggplot(hybrid_lags_plot, aes(x = lag, y = Estimate, fill = lag)) +
 ggsave("figure1.tiff", width = 3.5, height = 3, dpi = 600, compression = "lzw")
 
 #------------------------------------------------------------#
-#Population increase results paragraph ----
+#Population increase calcs (Results paragraph 1)  ----
 #------------------------------------------------------------#
 
 #tanner crab
