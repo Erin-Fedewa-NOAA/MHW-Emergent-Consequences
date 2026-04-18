@@ -15,11 +15,8 @@ library(crabpack)
 #data
 abundance <- read.csv("./output/crab_abundance.csv") %>%
                 filter(category == "population") %>%
-                #adding a group column for faceted plot
-                mutate(group = ifelse(species %in% c("tanner", "hybrid"),
-                  "Tanner + Hybrid", "Snow crab")) %>%
-                mutate(species = recode(species, "hybrid" = "Hybrid",
-                           "tanner" = "Tanner", "snow" = "Snow"))
+                mutate(species = recode(species, "hybrid" = "Snow x Tanner hybrids",
+                           "tanner" = "Tanner Crab", "snow" = "Snow Crab"))
   
 #plot with shared y axis
 abundance %>%
@@ -42,24 +39,26 @@ abundance %>%
 ggplot(abundance, aes(year, abundance, color = species)) +
   geom_ribbon(aes(ymin = abundance - abundance_ci,
                   ymax = abundance + abundance_ci,
-                  fill = species, group = species), alpha = 0.15, color = NA) +
+                  fill = species, group = species),
+              alpha = 0.15, color = NA) +
   geom_line(linewidth = 0.9) +
-  facet_wrap(~group, scales = "free_y", ncol = 1) +
-  scale_color_manual(values = c("Tanner" = "#D55E00",   
-                                "Snow"   = "#0072B2",   
-                                "Hybrid" = "#009E73")) +
-  scale_fill_manual(values = c("Tanner" = "#D55E00",   
-                                "Snow"   = "#0072B2",   
-                                "Hybrid" = "#009E73")) +
+  facet_wrap(~factor(species, levels = c("Snow Crab", "Tanner Crab", "Snow x Tanner hybrids")),
+    scales = "free_y", ncol = 1) +
+  scale_color_manual(values = c("Tanner Crab" = "#D55E00",
+                                "Snow Crab"   = "#0072B2",
+                                "Snow x Tanner hybrids" = "#009E73")) +
+  scale_fill_manual(values = c("Tanner Crab" = "#D55E00",
+                               "Snow Crab"   = "#0072B2",
+                               "Snow x Tanner hybrids" = "#009E73")) +
   labs(y = "Abundance (millions)", x = "") +
   theme_minimal(base_size = 11) +
-  theme(panel.spacing = unit(1.2, "lines"),
-        strip.text = element_blank(),
-        legend.position = "top",
-        legend.title = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.grid.major = element_line(color = "grey85", linewidth = 0.3),
-        panel.border = element_blank())
+  theme(
+    panel.spacing = unit(1.2, "lines"),
+    strip.text = element_text(face = "plain", color = "grey40", size = 11),
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "grey85", linewidth = 0.3),
+    panel.border = element_blank())
 
 #--------------------------------------#
 #Sea Ice plot ----
@@ -67,7 +66,8 @@ ggplot(abundance, aes(year, abundance, color = species)) +
 
 #data
 ice <- read.csv("./output/seaice_output.csv") %>%
-  select(year, Mar_Apr_ice_EBS_NBS) 
+  select(year, Mar_Apr_ice_EBS_NBS) %>%
+  filter(year >= 1988)
 
 #plot
 ggplot(ice, aes(year, Mar_Apr_ice_EBS_NBS)) +
@@ -202,3 +202,60 @@ ggplot(hybrid_lags_plot, aes(x = lag, y = Estimate, fill = lag)) +
 
 #follow up once figures are finalized!
 ggsave("figure1.tiff", width = 3.5, height = 3, dpi = 600, compression = "lzw")
+
+#------------------------------------------------------------#
+#Population increase results paragraph ----
+#------------------------------------------------------------#
+
+#tanner crab
+tanner <- read.csv("./output/crab_abundance.csv") %>%
+  filter(category == "population" & species == "tanner")
+
+historic_baseline <- tanner %>%
+  filter(year >= 1988, year <= 2023) %>%
+  summarise(mean_baseline = mean(abundance, na.rm = TRUE)) %>%
+  pull(mean_baseline)
+
+recent_mean <- tanner %>%
+  filter(year %in% c(2024, 2025)) %>%
+  summarise(mean_recent = mean(abundance, na.rm = TRUE)) %>%
+  pull(mean_recent)
+
+fold_change <- recent_mean / historic_baseline
+
+#hybrids
+hybrid <- read.csv("./output/crab_abundance.csv") %>%
+  filter(category == "population" & species == "hybrid")
+
+historic_baseline <- hybrid %>%
+  filter(year >= 1988, year <= 2023) %>%
+  summarise(mean_baseline = mean(abundance, na.rm = TRUE)) %>%
+  pull(mean_baseline)
+
+recent_mean <- hybrid %>%
+  filter(year %in% c(2024, 2025)) %>%
+  summarise(mean_recent = mean(abundance, na.rm = TRUE)) %>%
+  pull(mean_recent)
+
+fold_change <- recent_mean / historic_baseline
+
+#snow crab % decline during collapse
+read.csv("./output/crab_abundance.csv") %>%
+  filter(category == "population" & species == "snow") %>%
+  filter(year %in% c(2018, 2021)) %>%
+  summarise(
+    a2019 = abundance[year == 2018],
+    a2021 = abundance[year == 2021],
+    pct_decline = (1 - a2021 / a2019) * 100) %>%
+  pull(pct_decline)
+
+#proportion of Chionoecetes population comprised of hybrids pre-MHW
+abundance %>%
+  group_by(year) %>%
+  mutate(proportion = abundance / sum(abundance)) %>%
+  ungroup() %>%
+  group_by(species) %>%
+  summarise(mean_prop = mean(proportion, na.rm = TRUE))
+
+
+
