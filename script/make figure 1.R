@@ -114,7 +114,7 @@ ggplot(tanner_lags, aes(x = Causal_Pathway, y = Estimate, fill = lag)) +
   geom_hline(yintercept = 0, color = "black",linewidth = 0.3) +
   scale_fill_manual(values = c("#F7FBFF","#DEEBF7","#C6DBEF",
                                "#9ECAE1","#6BAED6","#3182BD","#08519C")) +
-  labs(x = "", y = "Effect size (± s.e.)", fill = "Lag") +
+  labs(x = "", y = "Causal estimate (± SE)", fill = "Lag") +
   theme_classic(base_size = 9) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
     legend.title = element_blank(),
@@ -135,7 +135,7 @@ ggplot(hybrid_lags, aes(x = Causal_Pathway, y = Estimate, fill = lag)) +
   geom_hline(yintercept = 0, color = "black",linewidth = 0.3) +
   scale_fill_manual(values = c("#F7FBFF","#DEEBF7","#C6DBEF",
                                "#9ECAE1","#6BAED6","#3182BD","#08519C")) +
-  labs(x = "", y = "Effect size (± s.e.)", fill = "Lag") +
+  labs(x = "", y = "Causal estimate (± SE)", fill = "Lag") +
   theme_classic(base_size = 9) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
         legend.title = element_blank(),
@@ -203,9 +203,9 @@ ggplot(hybrid_lags_plot, aes(x = lag, y = Estimate, fill = lag)) +
 #follow up once figures are finalized!
 ggsave("figure1.tiff", width = 3.5, height = 3, dpi = 600, compression = "lzw")
 
-#------------------------------------------------------------#
-#Population increase calcs (Results paragraph 1)  ----
-#------------------------------------------------------------#
+#--------------------------------------------------------------#
+#Population increase calculations (Results paragraph 1)  ----
+#--------------------------------------------------------------#
 
 #tanner crab
 tanner <- read.csv("./output/crab_abundance.csv") %>%
