@@ -27,7 +27,7 @@ current_year <- 2025
 years <- 1988:current_year
 
 #define corner stations so we can drop
-stations <- read.csv("Y:/KOD_Survey/EBS Shelf/Data_Processing/Data/lookup_tables/station_lookup.csv")
+stations <- read.csv("./data/station_lookup.csv")
 
 corners <- stations %>% 
   filter(REGION == "EBS", STATION_TYPE == "MTCA_CORNER") %>%
