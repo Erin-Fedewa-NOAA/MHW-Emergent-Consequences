@@ -37,11 +37,5 @@ temp_occ %>%
   geom_line() +
   theme_bw()
 
-#Write output for Temp Occupancy indicator 
-missing <- data.frame(YEAR = 2020)
 
-temp_occ %>%
-  bind_rows(missing) %>%
-  arrange(YEAR) %>%
-  write.csv(file="./Output/thermal_niche.csv", row.names = F)
 

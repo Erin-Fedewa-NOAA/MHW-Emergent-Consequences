@@ -83,7 +83,7 @@ ggplot(crab_cpue2, aes(x = longitude, y = latitude)) +
   coord_fixed() +
   theme_minimal()
 
-#hybrid prescence 
+#hybrid presence 
 crab_cpue2 <- crab_cpue2 %>%
   mutate(hybrid_present = hybrid_cpue > 0)
 
@@ -91,7 +91,7 @@ ggplot(crab_cpue2, aes(longitude, latitude)) +
   geom_point(aes(color = hybrid_present)) +
   facet_wrap(~year)
 
-#centroid of hybrid occurence 
+#centroid of hybrid occurrence 
 centroids <- crab_cpue %>%
   filter(hybrid_cpue > 0) %>%   # only where hybrids occur
   group_by(year) %>%

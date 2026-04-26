@@ -1,5 +1,5 @@
-# Calculate "D95" for Tanner, hybrid and snow crab:
-#area of stations that make up 95% of the cumulative cpue
+#Calculate "D95" and centroid of abundance for Tanner, hybrid and snow crab:
+  #D95 = area of stations that make up 95% of the cumulative cpue
 
 #Note that these are population-wide metrics only- large males is probably most
   #meaningful 
@@ -92,6 +92,28 @@ d95_snow %>%
   theme_bw() +
   theme(legend.title = element_blank()) 
 
+#Compute centroid of abundance
+cent_snow <- snow_cpue %>%
+  filter(!(STATION_ID %in% corners)) %>% #exclude corner stations
+  group_by(YEAR) %>%
+  summarise(Lat_COD = weighted.mean(LATITUDE, w = CPUE),
+            Lon_COD = weighted.mean(LONGITUDE, w = CPUE),
+            mean_cpue = mean(CPUE)) #add a column for mean cpue of each group in each year
+
+#plot center of latitude
+cent_snow %>%
+  ggplot(aes(x = YEAR, y = Lat_COD))+
+  geom_point(size=3)+
+  geom_line() +
+  theme_bw() 
+
+#plot center of longitude
+cent_snow %>%
+  ggplot(aes(x = YEAR, y = Lon_COD))+
+  geom_point(size=3)+
+  geom_line() +
+  theme_bw() 
+
 ##########################################
 # now compute D95 for tanner crab ----
 
@@ -121,7 +143,7 @@ d95_tanner %>%
   theme_bw() +
   theme(legend.title = element_blank()) 
 
-#combine datasets
+#combine datasets and plot
 d95_tanner %>%
   select(YEAR, d95) %>%
   rename(tanner_area=d95) %>%
@@ -134,6 +156,28 @@ area_occupied %>%
   ggplot(aes(tanner_area, snow_area)) +
   geom_point() +
   geom_smooth(method = 'lm')
+
+#Compute centroid of abundance
+cent_tanner <- tanner_cpue %>%
+  filter(!(STATION_ID %in% corners)) %>% #exclude corner stations
+  group_by(YEAR) %>%
+  summarise(Lat_COD = weighted.mean(LATITUDE, w = CPUE),
+            Lon_COD = weighted.mean(LONGITUDE, w = CPUE),
+            mean_cpue = mean(CPUE)) #add a column for mean cpue of each group in each year
+
+#plot center of latitude
+cent_tanner %>%
+  ggplot(aes(x = YEAR, y = Lat_COD))+
+  geom_point(size=3)+
+  geom_line() +
+  theme_bw() 
+
+#plot center of longitude
+cent_tanner %>%
+  ggplot(aes(x = YEAR, y = Lon_COD))+
+  geom_point(size=3)+
+  geom_line() +
+  theme_bw() 
 
 ##########################################
 # and compute D95 for hybrids ----
@@ -163,6 +207,29 @@ d95_hybrid %>%
   labs(x = "CPUE", y = expression("Area Occupied ("~nmi^2~")")) +
   theme_bw() +
   theme(legend.title = element_blank()) 
+
+#Compute centroid of abundance
+cent_hybrid <- hybrid_cpue %>%
+  filter(!(STATION_ID %in% corners)) %>% #exclude corner stations
+  group_by(YEAR) %>%
+  summarise(Lat_COD = weighted.mean(LATITUDE, w = CPUE),
+            Lon_COD = weighted.mean(LONGITUDE, w = CPUE),
+            mean_cpue = mean(CPUE)) #add a column for mean cpue of each group in each year
+
+#plot center of latitude
+cent_hybrid %>%
+  ggplot(aes(x = YEAR, y = Lat_COD))+
+  geom_point(size=3)+
+  geom_line() +
+  theme_bw() 
+
+#plot center of longitude
+cent_hybrid %>%
+  ggplot(aes(x = YEAR, y = Lon_COD))+
+  geom_point(size=3)+
+  geom_line() +
+  theme_bw() 
+
 
 ############################################
 

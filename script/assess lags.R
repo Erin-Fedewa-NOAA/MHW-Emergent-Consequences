@@ -1,5 +1,5 @@
-#Assess cross-correlations between causal relationships for testing 
-  #biologically constrained lags
+#Assess cross-correlations between causal relationships for initial  
+  #evaluation of biologically-constrained lags
 
 #Script Authors: E. Fedewa, M.Litzow, E. Ryznar
 
