@@ -10,11 +10,11 @@
 library(crabpack)
 library(tidyverse)
 
-########################################
-
 # Set years ----
 current_year <- 2025
 years <- 1988:current_year
+
+########################################
 
 ## Pull specimen data from crabpack ----
 hybrid <- get_specimen_data(species = "HYBRID",
@@ -23,7 +23,7 @@ hybrid <- get_specimen_data(species = "HYBRID",
 
 snow <- get_specimen_data(species = "SNOW",
                             region = "EBS",
-                            channel = "KOD")
+                          channel = "KOD")
 
 tanner <- get_specimen_data(species = "TANNER",
                             region = "EBS",
@@ -410,8 +410,8 @@ tanner_legal <- calc_bioabund(crab_data = tanner,
                             years = years) %>%
                 select(SPECIES, YEAR, ABUNDANCE, ABUNDANCE_CI)
 
-#join and calculate ratio
-ratio <- snow_legal %>% 
+#calculate ratio of 4 inch Chioneocetes that are hybrids
+chion_ratio <- snow_legal %>% 
   bind_rows(hybrid_legal) %>%
   bind_rows(tanner_legal) %>%
   pivot_wider(names_from = SPECIES, values_from = c(ABUNDANCE, ABUNDANCE_CI)) %>%
@@ -419,6 +419,7 @@ ratio <- snow_legal %>%
          p_snow   = ABUNDANCE_SNOW / total,
          p_hybrid = ABUNDANCE_HYBRID / total,
          p_tanner = ABUNDANCE_TANNER / total) %>%
+  right_join(., expand.grid(YEAR = years)) %>%
   rename_with(tolower) %>%
   select(year, p_snow, p_hybrid, p_tanner) %>%
   pivot_longer(cols = starts_with("p_"),
@@ -427,10 +428,51 @@ ratio <- snow_legal %>%
                           "p_tanner" = "Tanner", "p_hybrid" = "Hybrid"))
 
 #plot
-ratio %>%
+chion_ratio %>%
   ggplot(aes(year, prop, color = stock, fill = stock)) +
   geom_point() +
   geom_line() 
+
+#calculate % of 4 inch males that are hybrid and snow
+hybrid_ratio <- snow_legal %>% 
+  bind_rows(hybrid_legal) %>%
+  pivot_wider(names_from = SPECIES, values_from = c(ABUNDANCE, ABUNDANCE_CI)) %>%
+  mutate(total = ABUNDANCE_SNOW + ABUNDANCE_HYBRID,
+    prop_hybrid = (ABUNDANCE_HYBRID / total)*100,
+    # delta method SE for uncertainty- 
+    se_hybrid = ABUNDANCE_CI_HYBRID / 1.96,
+    se_snow   = ABUNDANCE_CI_SNOW / 1.96,
+    se_prop = sqrt(((ABUNDANCE_SNOW / total^2)^2 * se_hybrid^2) +
+        ((ABUNDANCE_HYBRID / total^2)^2 * se_snow^2)),
+    se_prop_pct = se_prop * 100,
+    prop_lower = prop_hybrid - 1.96 * se_prop_pct,
+    prop_upper = prop_hybrid + 1.96 * se_prop_pct) %>%
+  right_join(expand.grid(YEAR = years)) %>%
+  rename_with(tolower) %>%
+  select(year, prop_hybrid, prop_lower, prop_upper)
+
+
+# CI values are +/- the 95% CI half-width, so SE = CI / 1.96
+# p = H / (S + H); delta-method variance:
+# Var(p) = (S^2 * Var(H) + H^2 * Var(S)) / (S + H)^4
+plot_dat <- dat %>%
+  mutate(
+    se_snow   = snow_biomass_CI / 1.96,
+    se_hybrid = hybrid_biomass_CI / 1.96,
+    total     = snow_biomass + hybrid_biomass,
+    p         = hybrid_biomass / total,
+    var_p     = (snow_biomass^2 * se_hybrid^2 + hybrid_biomass^2 * se_snow^2) / total^4,
+    se_p      = sqrt(var_p),
+    pct       = 100 * p,
+    lwr       = 100 * pmax(0, p - 1.96 * se_p),
+    upr       = 100 * pmin(1, p + 1.96 * se_p))
+
+#plot
+hybrid_ratio %>%
+  ggplot(aes(year, prop_hybrid)) +
+  geom_ribbon(aes(ymin = prop_lower, ymax = prop_upper), alpha = 0.3, fill = "steelblue") +
+  geom_line(color = "steelblue", linewidth = 0.8) 
+  
 
 #-----------------------------
 # Join datasets and output
@@ -443,5 +485,5 @@ hyb_abun_dat %>%
 #Write output for abundance 
 write_csv(abun_dat, "./output/crab_abundance.csv")
 
-#write output for proportion legal
-write_csv(ratio, "./output/proportion_legal.csv")
+#write output for proportion hybrids
+write_csv(hybrid_ratio, "./output/proportion_hybrid.csv")
