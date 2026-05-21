@@ -150,6 +150,16 @@ read.csv("./output/crab_abundance.csv") %>%
 
 #proportion of Chionoecetes population comprised of hybrids pre-MHW
 abundance %>%
+  filter(year < 2021) %>%
+  group_by(year) %>%
+  mutate(proportion = abundance / sum(abundance)) %>%
+  ungroup() %>%
+  group_by(species) %>%
+  summarise(mean_prop = mean(proportion, na.rm = TRUE))
+
+#proportion of Chionoecetes population comprised of hybrids in 2025
+abundance %>%
+  filter(year == 2025) %>%
   group_by(year) %>%
   mutate(proportion = abundance / sum(abundance)) %>%
   ungroup() %>%
