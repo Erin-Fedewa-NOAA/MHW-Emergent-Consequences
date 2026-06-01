@@ -79,6 +79,7 @@ ggplot() +
   geom_sf(aes(fill = SPECIES), alpha = 0.3, color = NA) +
   geom_sf(data = ebs_layers$akland, fill = "grey85",
           color = "grey50", linewidth = 0.2) +
+  geom_sf(data = ebs_survey_areas, fill = NA, color = "grey65") +
   scale_x_continuous(limits = ebs_layers$plot.boundary$x,
                      breaks = ebs_layers$lon.breaks) +
   scale_y_continuous(limits = ebs_layers$plot.boundary$y,
