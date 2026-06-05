@@ -297,6 +297,8 @@ recent_mean <- tanner %>%
 
 fold_change <- recent_mean / historic_baseline
 
+##################
+
 #hybrids
 hybrid <- read.csv("./output/crab_abundance.csv") %>%
   filter(category == "population" & species == "hybrid")
@@ -316,9 +318,32 @@ recent_mean <- hybrid %>%
   summarise(mean_recent = mean(abundance, na.rm = TRUE)) %>%
   pull(mean_recent)
 
+#fold-change
 recent_mean / historic_baseline
 recent_mean / prior_mean
-pct_of_prior_max <- (100 * recent_mean / prior_max) - 100
+
+#percent increase from previous time series high
+pct_of_prior_max <- (100 * recent_mean / prior_max) 
+#Note! To use "% increase", subtract 100% to report the growth margin
+
+#percent increase from historical average
+((recent_mean - historic_baseline)/historic_baseline) * 100
+
+#fold change of legal male hybrid ratio 
+ratio_baseline <- ratio %>%
+  filter(year >= 1988, year <= 2024) %>%
+  summarise(mean_baseline = mean(prop_hybrid, na.rm = TRUE)) %>%
+  pull(mean_baseline)
+
+recent_mean <- ratio %>%
+  filter(year == 2025) %>%
+  summarise(mean_recent = mean(prop_hybrid, na.rm = TRUE)) %>%
+  pull(mean_recent)
+
+#fold-change
+recent_mean / ratio_baseline
+
+########################
 
 #snow crab % decline during collapse
 read.csv("./output/crab_abundance.csv") %>%
