@@ -13,11 +13,11 @@ This repository contains the source code for data processing and analytical work
 ---
 
 ## Project Overview
-* A 2018-2019 marine heatwave in the Bering Sea resulted in nearly ice-free winter conditions, leading to mass mortality of snow crab. Although the mass mortality event was the most immediate outcome of the heatwave, a number of emergent consequences have appeared in the following years for snow crab and its more boreal congener, Tanner crab. Here we use a fisheries-independent trawl survey time series to evaluate competing hypotheses for the cascading impacts of a marine heatwave on Bering Sea crab stocks.
+* A 2018-2019 marine heatwave in the Bering Sea resulted in nearly ice-free winter conditions, leading to mass mortality of snow crab. Although the mass mortality event was the most immediate outcome of the heatwave, a number of emergent consequences have appeared in the following years. Here we use a fisheries-independent trawl survey time series to evaluate competing hypotheses for the cascading impacts of a marine heatwave on Bering Sea crab stocks.
 
 ---
 
-### Software Dependencies
+## Software Dependencies
 * **Language environment:** R v4.3.2+ 
 * **R Package dependencies:** Bering Sea crab biomass and abundance estimates are produced using the `crabpack` R package (Hennessey 2024). Dynamic structural equation models are fitted using the `dsem` R package (Thorson et al. 2024) 
 
