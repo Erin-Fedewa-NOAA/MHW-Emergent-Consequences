@@ -13,13 +13,13 @@ This repository contains the source code for data processing and analytical work
 ---
 
 ## Project Overview
-* A 2018-2019 marine heatwave in the Bering Sea resulted in nearly ice-free winter conditions, leading to mass mortality of snow crab. Although the mass mortality event was the most immediate outcome of the heatwave, a number of emergent consequences have appeared in the following years. Here we use a fisheries-independent trawl survey time series to evaluate competing hypotheses for the cascading impacts of a marine heatwave on Bering Sea crab stocks.
+* A 2018-2019 marine heatwave in the Bering Sea resulted in nearly ice-free winter conditions, leading to mass mortality of snow crab. Although the mass mortality event was the most immediate outcome of the heatwave, a number of emergent consequences have appeared in the following years. Here, we use a fisheries-independent trawl survey time series to evaluate competing hypotheses for the cascading impacts of a marine heatwave on Bering Sea crab stocks.
 
 ---
 
 ## Software Dependencies
 * **Language environment:** R v4.3.2+ 
-* **R Package dependencies:** Bering Sea crab biomass and abundance estimates are produced using the `crabpack` R package (Hennessey 2024). Dynamic structural equation models are fitted using the `dsem` R package (Thorson et al. 2024) 
+* **R Package dependencies:** Bering Sea crab abundance estimates are produced using the `crabpack` R package (Hennessey 2024). Dynamic structural equation models are fitted using the `dsem` R package (Thorson et al. 2024) 
 
 ---
 
@@ -44,16 +44,16 @@ To reproduce the manuscript results and figures, execute the pipeline scripts se
 │   ├── Additional_explorations/    # Exploratory script only, not used in final analysis
 ├── data/
 │   ├── ERA5_ice_/                  # Sea ice data pulled from Climate Data Store API
-│   ├── station_lookup.csv/         # Intermediate processed data required for figure generation
+│   ├── station_lookup.csv/         # EBS survey strata used for subsetting data 
 ├── output/
-│   ├── crab_abundance/             # Output from get_crab_abundance, abundance time series of Tanner, snow and hybrid crab
-│   ├── hybrid_final_dsem_summary/  # Output from dsem_hybrid_model, model estimates and variance
-│   ├── hybrid_lags/                # Output from dsem_hybrid_model, model estimates across tested lags
+│   ├── crab_abundance/             # Output from get_crab_abundance; abundance time series of Tanner, snow and hybrid crab
+│   ├── hybrid_final_dsem_summary/  # Output from dsem_hybrid_model; model estimates and variance
+│   ├── hybrid_lags/                # Output from dsem_hybrid_model; model estimates across tested lags
 │   ├── overlap_output/             # Output from get_spatial_overlap
-│   ├── proportion_hybrid/          # Output from get_crab_abundance, % of 4 inch males that are hybrid and snow crab
-│   ├── seaice_output/              # Output from get_sea_ice, average spring ice extent 
-│   ├── tanner_final_dsem_summary/  # Output from dsem_tanner_model, model estimates and variance
-│   ├── tanner_lags/                # Output from dsem_tanner_model, model estimates across tested lags
+│   ├── proportion_hybrid/          # Output from get_crab_abundance; % of 4 inch males that are hybrid and snow crab
+│   ├── seaice_output/              # Output from get_sea_ice; average spring ice extent 
+│   ├── tanner_final_dsem_summary/  # Output from dsem_tanner_model; model estimates and variance
+│   ├── tanner_lags/                # Output from dsem_tanner_model; model estimates across tested lags
 ├── figures/                        # Figure 1 and Figure 2 output
 
 ```
