@@ -56,7 +56,6 @@ pts <- snow_cpue %>%
   st_transform(3338)
 
 # function to calculate 50% KDE polygon for each species
-  #using the 
 calc_kde <- function(x){
   sp_obj <- as(x, "Spatial")
     #estimate kernel density surface using adehabitatHR package
@@ -156,12 +155,13 @@ snow_plot <- abundance %>%
   geom_line(linewidth = 0.9, lineend = "round", color = "#0072B2") +
   annotate("rect", xmin= 2017.5, xmax=2019.5 ,ymin=-Inf , ymax=Inf, 
            alpha=0.1, fill= "grey60") +
- labs(y = "Abundance (millions)", x = "") +
+ labs(y = "Abundance\n(millions)", x = "") +
   theme_classic(base_size = 10) +
   annotate("text", x = 2008, y = Inf,
               label = "Snow crab", hjust = 0.5, vjust = 1.3,
               size = 3.5, fontface = "bold", color="grey50") +
-  coord_cartesian(clip = "off") +
+  scale_y_continuous(limits = c(0, 15900), expand = c(0, 0),
+                     breaks = c(5000, 10000, 15000)) +
   theme(axis.line = element_line(linewidth = 0.5),
         axis.ticks = element_line(linewidth = 0.4),
         panel.grid.minor = element_blank(),
@@ -179,12 +179,12 @@ tanner_plot <- abundance %>%
   geom_line(linewidth = 0.9, lineend = "round", color = "#D55E00") +
   annotate("rect", xmin= 2017.5, xmax=2019.5 ,ymin=-Inf , ymax=Inf, 
            alpha=0.1, fill= "grey60") +
-  labs(y = "Abundance (millions)", x = "") +
+  labs(y = "Abundance\n(millions)", x = "") +
   theme_classic(base_size = 10) +
-  annotate("text", x = 2008, y = Inf,
+  annotate("text", x = 2008, y = 1520,
            label = "Tanner crab", hjust = 0.5, vjust = 1,
            size = 3.5, fontface = "bold", color="grey50") +
-  coord_cartesian(clip = "off") +
+  scale_y_continuous(limits = c(0, 1550), expand = c(0, 0)) +
   theme(axis.line = element_line(linewidth = 0.5),
         axis.ticks = element_line(linewidth = 0.4),
         panel.grid.minor = element_blank(),
@@ -196,18 +196,19 @@ tanner_plot <- abundance %>%
 hybrid_plot <- abundance %>%
   filter(species == "Snow × Tanner hybrids") %>%
   ggplot(aes(year, abundance)) +
-  geom_ribbon(aes(ymin = abundance - abundance_ci,
-                  ymax = abundance + abundance_ci),
+  #capping error ribbons to reduce vertical white space
+  geom_ribbon(aes(ymin = pmax(0, abundance - abundance_ci),
+                  ymax = pmin(430, abundance + abundance_ci)),
               fill = "#4DA02C", alpha = 0.12) +
   geom_line(linewidth = 0.9, lineend = "round", color = "#4DA02C") +
   annotate("rect", xmin= 2017.5, xmax=2019.5 ,ymin=-Inf , ymax=Inf, 
            alpha=0.1, fill= "grey60") +
-  labs(y = "Abundance (millions)", x = "") +
+  labs(y = "Abundance\n(millions)", x = "") +
   theme_classic(base_size = 10) +
   annotate("text", x = 2008, y = Inf,
            label = "Snow × Tanner hybrids", hjust = 0.5, vjust = 1.3,
            size = 3.5, fontface = "bold", color="grey50") +
-  coord_cartesian(clip = "off") +
+  scale_y_continuous(limits = c(0, 430), expand = c(0, 0)) +
   theme(axis.line = element_line(linewidth = 0.5),
         axis.ticks = element_line(linewidth = 0.4),
         panel.grid.minor = element_blank(),
@@ -229,13 +230,14 @@ ice <- read.csv("./output/seaice_output.csv") %>%
 #plot
 ice_plot <- ggplot(ice, aes(year, ice)) +
   geom_line(linewidth = 0.8, lineend = "round", color="#0072B2") +
-  labs(y = "Sea ice extent (%)", x = "") +
+  labs(y = "Sea ice\nextent (%)", x = "") +
   annotate("rect", xmin= 2017.5, xmax=2019.5 ,ymin=-Inf , ymax=Inf, 
             alpha=0.1, fill= "grey60") +
-  annotate("text", x = 2007, y = 76,
+  annotate("text", x = 2007, y = 75,
            label = "Bering Sea ice extent", hjust = 0.5, vjust = 0.3,
            size = 3.5, fontface = "bold", color="grey50") +
   theme_classic(base_size = 10) +
+  scale_y_continuous(limits = c(0, 80), expand = c(0, 0)) +
   theme(axis.line = element_line(linewidth = 0.5),
         axis.ticks = element_line(linewidth = 0.4),
         panel.grid.major = element_line(color = "grey96", linewidth = 0.3),
@@ -251,19 +253,23 @@ ratio <- read.csv("./output/proportion_hybrid.csv")
 #plot
 ratio_plot <- ratio %>%
   ggplot(aes(year, prop_hybrid)) +
+  #capping error ribbons to reduce vertical white space
+  geom_ribbon(aes(ymin = pmax(0, prop_lower), 
+                  ymax = pmin(46, prop_upper)), 
+                  alpha = 0.3, fill = "#4FA32D") +
   geom_line(linewidth = 0.8, lineend = "round", color = "#4DA02C") +
   theme_classic(base_size = 10) +
   annotate("rect", xmin= 2017.5, xmax=2019.5 ,ymin=-Inf , ymax=Inf, 
            alpha=0.1, fill= "grey60") +
-  geom_ribbon(aes(ymin = prop_lower, ymax = prop_upper), alpha = 0.3, fill = "#4FA32D") +
-  annotate("text", x = 2007, y = 76,
-           label = "Commercial-sized hybrid fraction", hjust = 0.5, vjust = 0.3,
+  annotate("text", x = 2007, y = 43,
+           label = "Commercial-sized hybrids", hjust = 0.5, vjust = 0.3,
            size = 3.5, fontface = "bold", color="grey50") +
+  scale_y_continuous(limits = c(0, 46), expand = c(0, 0)) +
   theme(axis.line = element_line(linewidth = 0.5),
         axis.ticks = element_line(linewidth = 0.4),
         panel.grid.major = element_line(color = "grey96", linewidth = 0.3),
         panel.grid.minor = element_blank()) +
-  labs(y="Hybrid proportion (%)", x="") 
+  labs(y="Hybrid\nproportion (%)", x="") 
 
 #--------------------------------#
 #Combine and save figures ----
@@ -272,10 +278,14 @@ ratio_plot <- ratio %>%
 fig1 <- (free(map) + ice_plot + snow_plot + tanner_plot + hybrid_plot + ratio_plot) +
   plot_layout(ncol = 2, widths = c(1, 1)) +
   plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(face = "bold", size = 12))
+  theme( plot.tag.position = c(0, 1.04),
+         plot.tag = element_text(face = "bold", size = 12))
 
-ggsave("./figures/fig1.jpeg", fig1,
-  width = 7.2, height = 8.5, units = "in", dpi = 600)
+ggsave("./figures/fig1_tiff.tiff", fig1,
+  width = 6.5, height = 5, units = "in", dpi = 600, compression = "lzw")
+
+ggsave("./figures/fig1_pdf.pdf", fig1,
+       width = 6.5, height = 5, units = "in", dpi = 600)
 
 #--------------------------------------------------------------#
 #Population increase calculations (Results paragraph 1)  ----
