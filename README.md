@@ -8,7 +8,7 @@ This repository contains the source code for data processing and analytical work
 > 
 > **Authors:** Erin J. Fedewa*, Emily R. Ryznar, Connor Cleary, Jennifer L. Gardner, Shannon M. Hennessey, W. Christopher Long, Jon I. Richar, Leah S. Zacher and Michael A. Litzow
 > 
-> **Citation:** To be updated with DOI following acceptance
+> **Zenodo DOI:** [![DOI](https://zenodo.org/badge/1140208813.svg)](https://doi.org/10.5281/zenodo.22237475)
 
 ---
 
